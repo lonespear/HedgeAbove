@@ -71,6 +71,40 @@ def get_historical_data(symbols, period='1y'):
     except:
         return pd.DataFrame()
 
+@st.cache_data(ttl=300)
+def get_stock_info(symbol):
+    """Fetch detailed stock information"""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        hist = ticker.history(period='1y')
+
+        if hist.empty:
+            return None
+
+        current_price = hist['Close'].iloc[-1]
+
+        stock_data = {
+            'symbol': symbol,
+            'name': info.get('longName', symbol),
+            'current_price': current_price,
+            'previous_close': info.get('previousClose', current_price),
+            'open': info.get('open', current_price),
+            'day_high': info.get('dayHigh', current_price),
+            'day_low': info.get('dayLow', current_price),
+            'volume': info.get('volume', 0),
+            'market_cap': info.get('marketCap', 0),
+            'pe_ratio': info.get('trailingPE', None),
+            'dividend_yield': info.get('dividendYield', 0),
+            '52_week_high': info.get('fiftyTwoWeekHigh', current_price),
+            '52_week_low': info.get('fiftyTwoWeekLow', current_price),
+            'sector': info.get('sector', 'N/A'),
+            'industry': info.get('industry', 'N/A')
+        }
+        return stock_data
+    except:
+        return None
+
 @st.cache_data(ttl=3600)
 def get_sp500_tickers():
     """Get S&P 500 constituents"""
@@ -280,38 +314,104 @@ elif page == "Portfolio Builder":
 
     # Add Position Section
     with st.expander("➕ Add New Position", expanded=len(st.session_state.portfolio) == 0):
-        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+        # Step 1: Enter ticker
+        st.subheader("Step 1: Enter Ticker Symbol")
+        lookup_symbol = st.text_input("Search for a stock", placeholder="AAPL", key="lookup_symbol").upper()
 
-        with col1:
-            new_symbol = st.text_input("Ticker Symbol", placeholder="AAPL", key="new_symbol").upper()
-        with col2:
-            new_shares = st.number_input("Shares", min_value=0.01, value=10.0, step=1.0, key="new_shares")
-        with col3:
-            new_avg_price = st.number_input("Avg Price", min_value=0.01, value=100.0, step=0.01, key="new_avg_price")
-        with col4:
-            st.write("")
-            st.write("")
-            if st.button("➕ Add", type="primary", use_container_width=True):
-                if new_symbol:
-                    # Check if symbol already exists
-                    if new_symbol in st.session_state.portfolio['Symbol'].values:
-                        st.error(f"{new_symbol} already in portfolio. Edit it instead.")
+        # Fetch and display stock info
+        if lookup_symbol:
+            with st.spinner(f"Fetching data for {lookup_symbol}..."):
+                stock_info = get_stock_info(lookup_symbol)
+
+            if stock_info:
+                # Display stock information
+                st.success(f"✅ Found: **{stock_info['name']}** ({stock_info['symbol']})")
+
+                # Key Stats Display
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Current Price", f"${stock_info['current_price']:.2f}",
+                           f"{((stock_info['current_price'] - stock_info['previous_close']) / stock_info['previous_close'] * 100):.2f}%")
+                col2.metric("Market Cap", f"${stock_info['market_cap']/1e9:.2f}B" if stock_info['market_cap'] > 0 else "N/A")
+                col3.metric("P/E Ratio", f"{stock_info['pe_ratio']:.2f}" if stock_info['pe_ratio'] else "N/A")
+                col4.metric("Div Yield", f"{stock_info['dividend_yield']*100:.2f}%" if stock_info['dividend_yield'] else "N/A")
+
+                # Additional details
+                with st.expander("📊 More Details"):
+                    detail_col1, detail_col2, detail_col3 = st.columns(3)
+
+                    with detail_col1:
+                        st.write("**Today's Range:**")
+                        st.write(f"${stock_info['day_low']:.2f} - ${stock_info['day_high']:.2f}")
+                        st.write(f"**Open:** ${stock_info['open']:.2f}")
+
+                    with detail_col2:
+                        st.write("**52-Week Range:**")
+                        st.write(f"${stock_info['52_week_low']:.2f} - ${stock_info['52_week_high']:.2f}")
+                        pct_from_high = ((stock_info['current_price'] - stock_info['52_week_high']) / stock_info['52_week_high'] * 100)
+                        st.write(f"**From High:** {pct_from_high:.1f}%")
+
+                    with detail_col3:
+                        st.write(f"**Sector:** {stock_info['sector']}")
+                        st.write(f"**Industry:** {stock_info['industry']}")
+                        st.write(f"**Volume:** {stock_info['volume']:,}")
+
+                st.markdown("---")
+
+                # Step 2: Enter shares and price
+                st.subheader("Step 2: Position Details")
+
+                col1, col2, col3 = st.columns([2, 2, 1])
+
+                with col1:
+                    position_shares = st.number_input(
+                        "Number of Shares",
+                        min_value=0.01,
+                        value=10.0,
+                        step=1.0,
+                        key="position_shares",
+                        help="Enter the number of shares to add"
+                    )
+
+                with col2:
+                    manual_price = st.checkbox("Enter price manually", key="manual_price_toggle")
+
+                    if manual_price:
+                        position_price = st.number_input(
+                            "Purchase Price",
+                            min_value=0.01,
+                            value=float(stock_info['current_price']),
+                            step=0.01,
+                            key="position_price_manual",
+                            help="Enter your actual purchase price"
+                        )
                     else:
-                        # Verify symbol exists
-                        price = get_current_price(new_symbol)
-                        if price is not None:
-                            new_row = pd.DataFrame({
-                                'Symbol': [new_symbol],
-                                'Shares': [new_shares],
-                                'Avg Price': [new_avg_price]
-                            })
-                            st.session_state.portfolio = pd.concat([st.session_state.portfolio, new_row], ignore_index=True)
-                            st.success(f"✅ Added {new_shares} shares of {new_symbol} at ${new_avg_price:.2f}")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ Could not find ticker {new_symbol}. Please verify the symbol.")
-                else:
-                    st.warning("Please enter a ticker symbol")
+                        position_price = stock_info['current_price']
+                        st.info(f"**Using current market price:** ${position_price:.2f}")
+
+                with col3:
+                    st.write("")
+                    st.write("")
+                    position_value = position_shares * position_price
+                    st.metric("Total Cost", f"${position_value:,.2f}")
+
+                # Add button
+                if st.button("➕ Add Position to Portfolio", type="primary", use_container_width=True):
+                    if lookup_symbol in st.session_state.portfolio['Symbol'].values:
+                        st.error(f"❌ {lookup_symbol} is already in your portfolio. Use 'Edit' to update it.")
+                    else:
+                        new_row = pd.DataFrame({
+                            'Symbol': [lookup_symbol],
+                            'Shares': [position_shares],
+                            'Avg Price': [position_price]
+                        })
+                        st.session_state.portfolio = pd.concat([st.session_state.portfolio, new_row], ignore_index=True)
+                        st.success(f"✅ Added {position_shares} shares of {lookup_symbol} at ${position_price:.2f} (Total: ${position_value:,.2f})")
+                        st.balloons()
+                        st.rerun()
+
+            elif lookup_symbol:
+                st.error(f"❌ Could not find ticker '{lookup_symbol}'. Please verify the symbol and try again.")
+                st.caption("💡 Tip: Try common symbols like AAPL, MSFT, GOOGL, TSLA, NVDA")
 
     # Display Portfolio
     if len(st.session_state.portfolio) > 0:
