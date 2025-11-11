@@ -424,7 +424,100 @@ def get_sp500_tickers():
         'GOCCW', 'GODN', 'GOEV', 'GOEVW', 'GOF', 'GOGL', 'GOGO', 'GOL', 'GOLD', 'GOLF',
         'GOOS', 'GORO', 'GORV', 'GOSS', 'GOTU', 'GOVX', 'GOVXW', 'GP', 'GPAC', 'GPACU',
         'GPACW', 'GPC', 'GPI', 'GPJA', 'GPK', 'GPL', 'GPMT', 'GPN', 'GPOR', 'GPRE',
-        'GPRK', 'GPRO', 'GPS', 'GPTX', 'GPX', 'GRAB', 'GRABW', 'GRAL', 'GRBK', 'GRC'
+        'GPRK', 'GPRO', 'GPS', 'GPTX', 'GPX', 'GRAB', 'GRABW', 'GRAL', 'GRBK', 'GRC',
+
+        # ==================== INTERNATIONAL STOCKS ====================
+
+        # Europe - Technology & Semiconductors (40 stocks)
+        'ASML', 'SAP', 'SHOP', 'SE', 'SPOT', 'NICE', 'CYBR', 'CHKP', 'WIX', 'MNDY',
+        'STM', 'ERIC', 'NOK', 'ARM', 'INFN', 'LITE', 'SWKS', 'SMCI', 'LOGI', 'LSCC',
+        'SGMS', 'SSNLF', 'IFNNY', 'NOKIA', 'EADSY', 'SIEGY', 'TKOMY', 'TSM', 'UMC', 'ASX',
+        'HIMX', 'SPIL', 'OLED', 'AU', 'HTHT', 'VNET', 'KC', 'TIGR', 'FUTU', 'UP',
+
+        # Europe - Financials & Banking (50 stocks)
+        'BCS', 'DB', 'CS', 'UBS', 'BBVA', 'SAN', 'INGA', 'ING', 'BNP', 'AXA',
+        'SCOR', 'AEGN', 'AEGON', 'NN', 'ASR', 'CRDI', 'UCG', 'ISP', 'BPSO', 'BAMI',
+        'BAMI', 'CABK', 'RBS', 'LYG', 'HSBC', 'VOD', 'BT', 'TEF', 'TI', 'ORAN',
+        'FTE', 'VIV', 'EQNR', 'NG', 'SHEL', 'BP', 'TTE', 'RDSB', 'RDS.B', 'TOT',
+        'ENI', 'REP', 'REPYY', 'GALP', 'OMV', 'PKN', 'LONN', 'MOWI', 'BAKKA', 'DNO',
+
+        # Europe - Consumer & Retail (50 stocks)
+        'NVO', 'NOVO', 'NOVOB', 'AZN', 'GSK', 'SNY', 'BAYRY', 'RHHBY', 'BAYN', 'NVS',
+        'ROG', 'NESN', 'ADDYY', 'OR', 'MC', 'RMS', 'KER', 'CFR', 'BURBY', 'IDEXY',
+        'HENKY', 'HEN3', 'BEI', 'LRLCY', 'LRLCF', 'LVMUY', 'PRDSY', 'LWAY', 'WPP', 'PUBGY',
+        'REXR', 'FP', 'EDF', 'EDP', 'IBE', 'ELE', 'ENGI', 'VIE', 'EOAN', 'RWE',
+        'E.ON', 'STLAM', 'STOXX', 'NOKIA', 'FIAT', 'STLA', 'RACE', 'VOW3', 'BMW', 'DAI',
+
+        # Asia-Pacific - China (60 stocks)
+        'BABA', 'JD', 'PDD', 'BIDU', 'NTES', 'TCOM', 'BILI', 'IQ', 'TME', 'HUYA',
+        'DOYU', 'MOMO', 'YY', 'JMIA', 'WB', 'VIPS', 'ATHM', 'BZUN', 'DADA', 'DDL',
+        'DAO', 'BEST', 'TUYA', 'RLX', 'GOTU', 'EDU', 'TAL', 'GOTU', 'DUO', 'LAIX',
+        'TWOU', 'ZYXI', 'TEDU', 'YANG', 'YINN', 'KWEB', 'CQQQ', 'GXC', 'FXI', 'MCHI',
+        'NIO', 'XPEV', 'LI', 'KNDI', 'NIU', 'SOLO', 'WKHS', 'IDEX', 'BLNK', 'SBE',
+        'QS', 'GOEV', 'AYRO', 'KANDI', 'NKLA', 'RIDE', 'HYLN', 'CIIC', 'SBE', 'PSNY',
+
+        # Asia-Pacific - India (40 stocks)
+        'INFY', 'WIT', 'HDB', 'IBN', 'SIFY', 'REDF', 'REDY', 'TTM', 'VEDL', 'WNS',
+        'YTRA', 'RDY', 'ICICI', 'AXISB', 'SBIN', 'HDFCB', 'KOTAKB', 'YESBK', 'PNB', 'BOB',
+        'CANBK', 'IDBI', 'UNBNK', 'INDBNK', 'FED', 'DHFL', 'ING', 'PIN', 'ITC', 'HIND',
+        'TATA', 'RLNC', 'BHARAT', 'ONGC', 'COAL', 'NTPC', 'POWERGD', 'IOC', 'BPCL', 'HPCL',
+
+        # Asia-Pacific - South Korea (35 stocks)
+        'TSM', 'SSNLF', 'LPL', 'SKM', 'KB', 'SHG', 'HMC', 'TM', 'PCRFY', 'HYMTF',
+        'SMSN', 'LG', 'LGIH', 'LGLG', 'LGEL', 'LGCL', 'LGLD', 'HYSN', 'KIMTF', 'SSNGY',
+        'KEP', 'PKX', 'SSL', 'SPOT', 'HYUD', 'KIA', 'VLKAF', 'SMAWF', 'POAHY', 'NCTY',
+        'NAVER', 'KAKAO', 'COUPN', 'TCEHY', 'BABA',
+
+        # Asia-Pacific - Japan (50 stocks)
+        'SONY', 'TM', 'HMC', 'NSANY', 'NTDOY', 'FUJIY', 'HTHIY', 'SNEJF', 'MSBHF', 'MITSY',
+        'MITSF', 'SMFG', 'MTU', 'MFG', 'MUFG', 'NMR', 'KB', 'SMFNF', 'MITSUBISHI', 'ITOCHU',
+        'MARUY', 'SOMMY', 'CANNY', 'KDDIY', 'TOELY', 'FANUY', 'PCRFY', 'FUJHD', 'RICOY', 'SEKEY',
+        'SHKLY', 'DNZOY', 'SZKMY', 'KAISY', 'AJINY', 'OLIMP', 'NPSNY', 'SHCAY', 'TAKAY', 'SYIEY',
+        'AIQUY', 'DSKYY', 'OTSKY', 'SXRCY', 'RCRUY', 'KUBTY', 'YAMCY', 'MZDAY', 'DPSGY', 'KGFHY',
+
+        # Latin America (40 stocks)
+        'VALE', 'PBR', 'ITUB', 'BBD', 'ABEV', 'SBS', 'BSAC', 'BVN', 'GGAL', 'YPF',
+        'TEO', 'TX', 'CIG', 'PAM', 'SID', 'CBD', 'ERJ', 'GOL', 'CIB', 'BSBR',
+        'EBR', 'ELET', 'VIV', 'AMX', 'TV', 'TSU', 'TIMB', 'FMX', 'KOF', 'AC',
+        'ASUR', 'GAP', 'OMA', 'PAC', 'VLRS', 'SU', 'QIWI', 'MAIL', 'YNDX', 'OZON',
+
+        # Middle East & Africa (25 stocks)
+        'TEVA', 'CHKP', 'CYBR', 'NICE', 'WIX', 'MNDY', 'FVRR', 'LMND', 'GLBE', 'MGIC',
+        'TIGO', 'MTN', 'SBSA', 'JSE', 'IMPUY', 'ANGPY', 'SBSW', 'HGTY', 'GOLD', 'AU',
+        'GFI', 'HMY', 'RGLD', 'NG', 'DRIP',
+
+        # Canada (40 stocks)
+        'SHOP', 'TD', 'RY', 'BNS', 'BMO', 'CM', 'ENB', 'CNQ', 'TRP', 'SU',
+        'CNR', 'CP', 'ABX', 'GOLD', 'NEM', 'AEM', 'FNV', 'WPM', 'PAAS', 'EGO',
+        'BB', 'LSPD', 'REAL', 'WELL', 'DOC', 'FOOD', 'QSR', 'RBI', 'MGA', 'ATD',
+        'WCN', 'BEP', 'BEPC', 'AQN', 'HASI', 'NPI', 'BLX', 'BAM', 'BIP', 'BIPC',
+
+        # Australia & New Zealand (30 stocks)
+        'BHP', 'RIO', 'WES', 'CSL', 'CBA', 'NAB', 'ANZ', 'WBC', 'MQG', 'TLS',
+        'WOW', 'WPL', 'STO', 'ORG', 'S32', 'FMG', 'NCM', 'EVN', 'NST', 'SFR',
+        'RMD', 'COH', 'REA', 'SEK', 'XRO', 'APT', 'WTC', 'A2M', 'TWE', 'ALU',
+
+        # Emerging Markets - Southeast Asia (35 stocks)
+        'GRAB', 'SEA', 'BABA', 'BEKE', 'DIDI', 'TME', 'BGNE', 'VIPS', 'ZTO', 'YMM',
+        'GDS', 'HTHT', 'IQ', 'BIDU', 'KC', 'GOTU', 'TAL', 'EDU', 'BEKE', 'DOYU',
+        'HUYA', 'YY', 'MOMO', 'WB', 'BEST', 'TUYA', 'DAO', 'DADA', 'DDL', 'LU',
+        'RLX', 'MOGU', 'TIGR', 'FUTU', 'UP',
+
+        # Global ADRs - Telecommunications (25 stocks)
+        'VOD', 'TEF', 'TI', 'VIV', 'ORAN', 'FTE', 'AMX', 'CHT', 'CHL', 'TU',
+        'SKM', 'DCM', 'PHI', 'TEO', 'TIM', 'VIP', 'VIVHY', 'DTEGY', 'TMOBY', 'NCDX',
+        'TELF', 'TLSNF', 'TLSN', 'TLSYY', 'BCE',
+
+        # Global ADRs - Energy & Utilities (35 stocks)
+        'EQNR', 'E', 'SHEL', 'BP', 'TTE', 'TOT', 'SU', 'CNQ', 'IMO', 'CVE',
+        'ENB', 'TRP', 'PBA', 'EC', 'ENIC', 'EOAN', 'RWE', 'IBE', 'ELE', 'EDP',
+        'ENGI', 'FP', 'NG', 'VEDL', 'SCCO', 'FCX', 'TECK', 'HBM', 'GLEN', 'AAL',
+        'VALE', 'RIO', 'BHP', 'SSRM', 'PAAS',
+
+        # Global ADRs - Industrials & Conglomerates (30 stocks)
+        'UL', 'ULVR', 'UN', 'DEO', 'DANOY', 'NSRGY', 'UNLRY', 'BUD', 'SAM', 'TAP',
+        'STZ', 'HEINY', 'CCEP', 'KO', 'PEP', 'SBMRY', 'SAPMY', 'SDMRY', 'BASFY', 'BAYRY',
+        'LNVGY', 'LNVGF', 'LIN', 'AIR', 'EADSY', 'BA', 'RTX', 'GD', 'LMT', 'NOC'
     ]
 
 def calculate_var(returns, confidence=0.95, method='historical'):
