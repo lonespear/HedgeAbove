@@ -107,52 +107,103 @@ def get_stock_info(symbol):
 
 @st.cache_data(ttl=3600)
 def get_sp500_tickers():
-    """Get expanded S&P 500 constituents with better sector coverage"""
+    """Get comprehensive S&P 500 constituents with full sector coverage (~500+ tickers)"""
     return [
-        # Technology (FAANG + Major Tech)
+        # Technology - Mega Cap (40 stocks)
         'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'META', 'NVDA', 'TSLA', 'AVGO', 'ORCL',
         'ADBE', 'NFLX', 'CRM', 'CSCO', 'INTC', 'AMD', 'TXN', 'QCOM', 'IBM', 'NOW',
         'INTU', 'AMAT', 'MU', 'ADI', 'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MCHP', 'FTNT',
+        'PANW', 'ADSK', 'ANSS', 'WDAY', 'TEAM', 'DDOG', 'CRWD', 'ZS', 'SNOW', 'NET',
 
-        # Healthcare - Pharma & Biotech
+        # Technology - Software & Cloud (30 stocks)
+        'MSFT', 'ORCL', 'SAP', 'SHOP', 'SQ', 'TWLO', 'DOCU', 'ZM', 'OKTA', 'SPLK',
+        'VEEV', 'RNG', 'HUBS', 'ZI', 'BILL', 'MNDY', 'PATH', 'GTLB', 'S', 'ESTC',
+        'MDB', 'CFLT', 'DT', 'DOCN', 'FROG', 'PD', 'NCNO', 'ASAN', 'PCOR', 'BRZE',
+
+        # Technology - Semiconductors (25 stocks)
+        'NVDA', 'AMD', 'INTC', 'QCOM', 'TXN', 'AVGO', 'ADI', 'MCHP', 'KLAC', 'LRCX',
+        'AMAT', 'MU', 'NXPI', 'MRVL', 'ON', 'MPWR', 'SWKS', 'QRVO', 'ENTG', 'ALGM',
+        'WOLF', 'SLAB', 'CRUS', 'SITM', 'LSCC',
+
+        # Healthcare - Pharma & Biotech (50 stocks)
         'JNJ', 'UNH', 'LLY', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY',
         'AMGN', 'GILD', 'CVS', 'CI', 'ELV', 'REGN', 'VRTX', 'HUM', 'ISRG', 'ZTS',
         'BIIB', 'MRNA', 'ILMN', 'IQV', 'BSX', 'MDT', 'SYK', 'EW', 'IDXX', 'HCA',
+        'A', 'ALGN', 'ALNY', 'BAX', 'BDX', 'BIO', 'CNC', 'CTLT', 'DGX', 'DVA',
+        'EXAS', 'GEHC', 'HOLX', 'HSIC', 'INCY', 'LH', 'MCK', 'MOH', 'PODD', 'RMD',
 
-        # Financials
+        # Financials - Banks (40 stocks)
         'JPM', 'BAC', 'WFC', 'MS', 'GS', 'BLK', 'C', 'SCHW', 'AXP', 'SPGI',
         'CB', 'MMC', 'PGR', 'TFC', 'USB', 'PNC', 'COF', 'BK', 'AIG', 'MET',
+        'CME', 'ICE', 'MCO', 'AON', 'TRV', 'ALL', 'AFL', 'PRU', 'HIG', 'CINF',
+        'BRO', 'L', 'GL', 'WRB', 'RJF', 'NTRS', 'CFG', 'HBAN', 'RF', 'KEY',
 
-        # Consumer Discretionary
+        # Financials - Insurance & Asset Management (20 stocks)
+        'BRK.B', 'BLK', 'TROW', 'BEN', 'IVZ', 'STT', 'AMG', 'SEIC', 'EVR', 'PFG',
+        'FNF', 'FAF', 'JKHY', 'CBOE', 'NDAQ', 'MKTX', 'MSCI', 'FDS', 'TW', 'VIRT',
+
+        # Consumer Discretionary - Retail (40 stocks)
         'AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX', 'BKNG',
         'MAR', 'GM', 'F', 'ABNB', 'CMG', 'YUM', 'DRI', 'ROST', 'DG', 'ULTA',
+        'EBAY', 'ETSY', 'W', 'BBY', 'DKS', 'FIVE', 'OLLI', 'BJ', 'BBWI', 'AEO',
+        'ANF', 'BOOT', 'BWA', 'CRI', 'DDS', 'FL', 'GES', 'GPS', 'KSS', 'M',
 
-        # Consumer Staples
+        # Consumer Discretionary - Auto & Leisure (25 stocks)
+        'TSLA', 'GM', 'F', 'RIVN', 'LCID', 'NIO', 'LI', 'XPEV', 'HMC', 'TM',
+        'RACE', 'STLA', 'CCL', 'RCL', 'NCLH', 'LVS', 'WYNN', 'MGM', 'CZR', 'PENN',
+        'DKNG', 'FLUT', 'BALY', 'RSI', 'LYV',
+
+        # Consumer Staples (35 stocks)
         'WMT', 'PG', 'COST', 'KO', 'PEP', 'PM', 'MO', 'CL', 'MDLZ', 'KMB',
-        'GIS', 'KHC', 'TSN', 'HSY', 'K', 'CLX', 'SJM', 'CPB',
+        'GIS', 'KHC', 'TSN', 'HSY', 'K', 'CLX', 'SJM', 'CPB', 'CAG', 'HRL',
+        'MKC', 'CHD', 'TAP', 'STZ', 'BF.B', 'SAM', 'KDP', 'MNST', 'CELH', 'KR',
+        'SYY', 'COKE', 'FLO', 'INGR', 'POST',
 
-        # Energy
+        # Energy (35 stocks)
         'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
-        'WMB', 'KMI', 'BKR', 'HES', 'DVN', 'FANG', 'MRO', 'APA',
+        'WMB', 'KMI', 'BKR', 'HES', 'DVN', 'FANG', 'MRO', 'APA', 'CTRA', 'OVV',
+        'NOV', 'FTI', 'CHX', 'RIG', 'VAL', 'PR', 'EQT', 'AR', 'MTDR', 'SM',
+        'MGY', 'CNX', 'RRC', 'CIVI', 'CLB',
 
-        # Industrials
+        # Industrials (50 stocks)
         'UNP', 'HON', 'RTX', 'UPS', 'CAT', 'DE', 'BA', 'LMT', 'GE', 'MMM',
         'FDX', 'NSC', 'EMR', 'ETN', 'ITW', 'PH', 'WM', 'CSX', 'NOC', 'GD',
+        'PCAR', 'JCI', 'CARR', 'OTIS', 'TT', 'IR', 'FAST', 'ODFL', 'CHRW', 'JBHT',
+        'EXPD', 'XPO', 'HUBG', 'GWW', 'WCC', 'DY', 'ALLE', 'BLDR', 'FBIN', 'VMI',
+        'MLM', 'GNRC', 'AIT', 'AAON', 'ACM', 'ACA', 'AGCO', 'ALK', 'ARCB', 'B',
 
-        # Communication Services
-        'META', 'GOOGL', 'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'EA', 'TTWO',
+        # Communication Services (30 stocks)
+        'META', 'GOOGL', 'GOOG', 'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'EA',
+        'TTWO', 'RBLX', 'U', 'PINS', 'SNAP', 'SPOT', 'MTCH', 'BMBL', 'YELP', 'ZG',
+        'ROKU', 'PARA', 'WBD', 'FOXA', 'FOX', 'NWSA', 'NWS', 'NYT', 'OMC', 'IPG',
 
-        # Utilities
+        # Utilities (25 stocks)
         'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'SRE', 'XEL', 'ES', 'ED',
+        'PEG', 'EIX', 'WEC', 'AWK', 'DTE', 'PPL', 'FE', 'CMS', 'CNP', 'ATO',
+        'NI', 'LNT', 'EVRG', 'PNW', 'OGE',
 
-        # Real Estate
+        # Real Estate - REITs (35 stocks)
         'PLD', 'AMT', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'WELL', 'DLR', 'AVB',
+        'EQR', 'VTR', 'SBAC', 'INVH', 'ARE', 'MAA', 'DOC', 'UDR', 'ESS', 'KIM',
+        'REG', 'FRT', 'BXP', 'VNO', 'SLG', 'HST', 'RHP', 'CPT', 'ELS', 'AMH',
+        'CUBE', 'REXR', 'FR', 'STAG', 'TRNO',
 
-        # Materials
+        # Materials (30 stocks)
         'LIN', 'APD', 'ECL', 'SHW', 'FCX', 'NEM', 'DOW', 'DD', 'NUE', 'VMC',
+        'MLM', 'ALB', 'CTVA', 'EMN', 'MOS', 'CE', 'FMC', 'IFF', 'PKG', 'AMCR',
+        'IP', 'SEE', 'AVY', 'BALL', 'CCK', 'NEM', 'GOLD', 'WPM', 'FNV', 'SCCO',
 
-        # Payment/Fintech
-        'V', 'MA', 'PYPL', 'ADP', 'FIS', 'FISV', 'GPN'
+        # Payment/Fintech (20 stocks)
+        'V', 'MA', 'PYPL', 'ADP', 'FIS', 'FISV', 'GPN', 'SQ', 'COIN', 'SOFI',
+        'AFRM', 'UPST', 'LC', 'NU', 'HOOD', 'MELI', 'PAGS', 'STNE', 'PAYX', 'FLYW',
+
+        # Aerospace & Defense (15 stocks)
+        'BA', 'LMT', 'RTX', 'NOC', 'GD', 'LHX', 'TDG', 'HWM', 'TXT', 'HII',
+        'AVAV', 'KTOS', 'AJRD', 'CW', 'SPR',
+
+        # Emerging Growth & Innovation (20 stocks)
+        'PLTR', 'IONQ', 'RKLB', 'SPCE', 'OPEN', 'DASH', 'UBER', 'LYFT', 'CVNA', 'CHWY',
+        'CHEWY', 'W', 'FVRR', 'UPWK', 'ZI', 'DOCN', 'APPS', 'BIGC', 'SHOP', 'MELI'
     ]
 
 def calculate_var(returns, confidence=0.95, method='historical'):
