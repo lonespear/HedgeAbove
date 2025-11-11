@@ -259,10 +259,15 @@ def generate_efficient_frontier(returns, num_portfolios=50):
 
     return frontier_rets, frontier_vols, frontier_weights
 
-#==================== HEADER ====================
+#==================== SIDEBAR ====================
 
-st.markdown('<div class="main-header">HedgeAbove</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Rise Above Market Uncertainty</div>', unsafe_allow_html=True)
+# Logo and branding
+st.sidebar.image("hedge_above_logo.png", use_container_width=True)
+st.sidebar.markdown(
+    "<p style='text-align: center; font-family: monospace; color: #888; font-size: 0.9rem;'>Rise Above the Status Quo</p>",
+    unsafe_allow_html=True
+)
+st.sidebar.markdown("---")
 
 # Sidebar navigation
 st.sidebar.title("Navigation")
