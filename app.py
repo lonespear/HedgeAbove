@@ -928,6 +928,180 @@ def simulate_copula(copula, n_samples=1000):
     except Exception as e:
         return None
 
+#==================== BLACK-SCHOLES & GREEKS ====================
+
+def black_scholes(S, K, T, r, sigma, option_type='call'):
+    """
+    Calculate Black-Scholes option price
+
+    Parameters:
+    S: Current stock price
+    K: Strike price
+    T: Time to expiration (years)
+    r: Risk-free rate (annual)
+    sigma: Volatility (annual)
+    option_type: 'call' or 'put'
+
+    Returns:
+    Option price
+    """
+    from scipy.stats import norm
+
+    if T <= 0:
+        # At expiration
+        if option_type == 'call':
+            return max(S - K, 0)
+        else:
+            return max(K - S, 0)
+
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+
+    if option_type == 'call':
+        price = S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+    elif option_type == 'put':
+        price = K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+    else:
+        raise ValueError("option_type must be 'call' or 'put'")
+
+    return price
+
+def calculate_greeks(S, K, T, r, sigma, option_type='call'):
+    """
+    Calculate option Greeks (Delta, Gamma, Theta, Vega, Rho)
+
+    Parameters:
+    S: Current stock price
+    K: Strike price
+    T: Time to expiration (years)
+    r: Risk-free rate (annual)
+    sigma: Volatility (annual)
+    option_type: 'call' or 'put'
+
+    Returns:
+    Dictionary with all Greeks
+    """
+    from scipy.stats import norm
+
+    if T <= 0:
+        # At expiration, Greeks are 0 except Delta
+        if option_type == 'call':
+            delta = 1.0 if S > K else 0.0
+        else:
+            delta = -1.0 if S < K else 0.0
+
+        return {
+            'delta': delta,
+            'gamma': 0.0,
+            'theta': 0.0,
+            'vega': 0.0,
+            'rho': 0.0
+        }
+
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+
+    # Delta
+    if option_type == 'call':
+        delta = norm.cdf(d1)
+    else:
+        delta = norm.cdf(d1) - 1
+
+    # Gamma (same for calls and puts)
+    gamma = norm.pdf(d1) / (S * sigma * np.sqrt(T))
+
+    # Vega (same for calls and puts)
+    vega = S * norm.pdf(d1) * np.sqrt(T) / 100  # Divide by 100 for 1% change
+
+    # Theta
+    if option_type == 'call':
+        theta = ((-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))
+                 - r * K * np.exp(-r * T) * norm.cdf(d2)) / 365)
+    else:
+        theta = ((-S * norm.pdf(d1) * sigma / (2 * np.sqrt(T))
+                 + r * K * np.exp(-r * T) * norm.cdf(-d2)) / 365)
+
+    # Rho
+    if option_type == 'call':
+        rho = K * T * np.exp(-r * T) * norm.cdf(d2) / 100  # Divide by 100 for 1% change
+    else:
+        rho = -K * T * np.exp(-r * T) * norm.cdf(-d2) / 100
+
+    return {
+        'delta': delta,
+        'gamma': gamma,
+        'theta': theta,
+        'vega': vega,
+        'rho': rho
+    }
+
+def implied_volatility(option_price, S, K, T, r, option_type='call', max_iterations=100, tolerance=1e-5):
+    """
+    Calculate implied volatility using Newton-Raphson method
+
+    Parameters:
+    option_price: Market price of the option
+    S: Current stock price
+    K: Strike price
+    T: Time to expiration (years)
+    r: Risk-free rate (annual)
+    option_type: 'call' or 'put'
+
+    Returns:
+    Implied volatility (annual)
+    """
+    # Initial guess
+    sigma = 0.3
+
+    for i in range(max_iterations):
+        # Calculate option price and vega with current sigma
+        price = black_scholes(S, K, T, r, sigma, option_type)
+        vega = calculate_greeks(S, K, T, r, sigma, option_type)['vega'] * 100  # Multiply back for calculation
+
+        # Price difference
+        diff = option_price - price
+
+        # Check convergence
+        if abs(diff) < tolerance:
+            return sigma
+
+        # Newton-Raphson update
+        if vega != 0:
+            sigma = sigma + diff / vega
+        else:
+            return None
+
+        # Keep sigma positive and reasonable
+        sigma = max(0.01, min(sigma, 5.0))
+
+    return None  # Failed to converge
+
+def option_payoff(S_range, K, premium, option_type='call', position='long'):
+    """
+    Calculate option payoff diagram
+
+    Parameters:
+    S_range: Array of stock prices
+    K: Strike price
+    premium: Option premium paid/received
+    option_type: 'call' or 'put'
+    position: 'long' or 'short'
+
+    Returns:
+    Array of payoffs
+    """
+    if option_type == 'call':
+        intrinsic = np.maximum(S_range - K, 0)
+    else:
+        intrinsic = np.maximum(K - S_range, 0)
+
+    if position == 'long':
+        payoff = intrinsic - premium
+    else:
+        payoff = premium - intrinsic
+
+    return payoff
+
 def optimize_portfolio(returns, method='max_sharpe', target_return=None):
     """Portfolio optimization using Modern Portfolio Theory"""
     n_assets = returns.shape[1]
@@ -1013,7 +1187,7 @@ st.sidebar.markdown("---")
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Stock Screener", "Portfolio Builder", "Risk Analytics", "Portfolio Optimization", "AI Predictions"]
+    ["Home", "Stock Screener", "Portfolio Builder", "Risk Analytics", "Portfolio Optimization", "AI Predictions", "Options Pricing"]
 )
 
 # Sidebar user info
@@ -2599,6 +2773,374 @@ elif page == "AI Predictions":
                                 st.metric("90% Range", f"${final_lower:.2f} - ${final_upper:.2f}")
                 else:
                     st.error(f"Could not fetch data for {combined_ticker}")
+
+#==================== OPTIONS PRICING ====================
+
+elif page == "Options Pricing":
+    st.header("💹 Options Pricing & Greeks Calculator")
+    st.caption("Black-Scholes pricing model with full Greeks analysis")
+
+    # Tabs for different calculators
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🎯 Single Option Pricing",
+        "📊 Options Strategy Builder",
+        "📈 Greeks Surface",
+        "🔮 Implied Volatility"
+    ])
+
+    #---------- TAB 1: SINGLE OPTION PRICING ----------
+    with tab1:
+        st.subheader("Black-Scholes Option Pricing")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### Option Parameters")
+
+            # Fetch current price option
+            ticker_input = st.text_input("Stock Ticker (optional - for live price)", value="AAPL", key='bs_ticker')
+            fetch_price = st.checkbox("Fetch current price", value=False, key='fetch_price')
+
+            if fetch_price and ticker_input:
+                with st.spinner(f"Fetching {ticker_input} data..."):
+                    stock_info = get_stock_info(ticker_input)
+                    if stock_info:
+                        S_default = stock_info['current_price']
+                        sigma_default = stock_info.get('beta', 0.3) * 0.20 if stock_info.get('beta') else 0.30
+                        st.success(f"Current price: ${S_default:.2f}")
+                    else:
+                        S_default = 100.0
+                        sigma_default = 0.30
+                        st.warning("Could not fetch price, using default")
+            else:
+                S_default = 100.0
+                sigma_default = 0.30
+
+            S = st.number_input("Current Stock Price ($)", value=float(S_default), min_value=0.01, step=1.0, key='bs_S')
+            K = st.number_input("Strike Price ($)", value=float(S_default), min_value=0.01, step=1.0, key='bs_K')
+            T = st.number_input("Time to Expiration (days)", value=30, min_value=1, step=1, key='bs_T') / 365.0
+            r = st.number_input("Risk-Free Rate (%)", value=5.0, min_value=0.0, max_value=20.0, step=0.1, key='bs_r') / 100
+            sigma = st.number_input("Volatility (% annual)", value=sigma_default * 100, min_value=1.0, max_value=200.0, step=1.0, key='bs_sigma') / 100
+            option_type = st.selectbox("Option Type", ["call", "put"], key='bs_type')
+
+        with col2:
+            st.markdown("#### Pricing Results")
+
+            # Calculate option price
+            option_price = black_scholes(S, K, T, r, sigma, option_type)
+
+            # Calculate Greeks
+            greeks = calculate_greeks(S, K, T, r, sigma, option_type)
+
+            # Display price
+            st.metric("Option Price", f"${option_price:.4f}", help="Black-Scholes theoretical price")
+
+            # Calculate intrinsic and time value
+            if option_type == 'call':
+                intrinsic = max(S - K, 0)
+            else:
+                intrinsic = max(K - S, 0)
+            time_value = option_price - intrinsic
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("Intrinsic Value", f"${intrinsic:.4f}")
+            with col_b:
+                st.metric("Time Value", f"${time_value:.4f}")
+
+            # Moneyness
+            moneyness = S / K
+            if moneyness > 1.02:
+                money_status = "In-the-Money (ITM)" if option_type == 'call' else "Out-of-the-Money (OTM)"
+            elif moneyness < 0.98:
+                money_status = "Out-of-the-Money (OTM)" if option_type == 'call' else "In-the-Money (ITM)"
+            else:
+                money_status = "At-the-Money (ATM)"
+
+            st.info(f"**Status:** {money_status} (S/K = {moneyness:.4f})")
+
+        st.markdown("---")
+        st.subheader("📐 The Greeks")
+        st.caption("Sensitivity measures of option price to various factors")
+
+        col1, col2, col3, col4, col5 = st.columns(5)
+
+        with col1:
+            st.metric(
+                "Delta (Δ)",
+                f"{greeks['delta']:.4f}",
+                help="Change in option price for $1 change in stock price"
+            )
+
+        with col2:
+            st.metric(
+                "Gamma (Γ)",
+                f"{greeks['gamma']:.4f}",
+                help="Change in Delta for $1 change in stock price"
+            )
+
+        with col3:
+            st.metric(
+                "Theta (Θ)",
+                f"{greeks['theta']:.4f}",
+                help="Change in option price per day (time decay)"
+            )
+
+        with col4:
+            st.metric(
+                "Vega (ν)",
+                f"{greeks['vega']:.4f}",
+                help="Change in option price for 1% change in volatility"
+            )
+
+        with col5:
+            st.metric(
+                "Rho (ρ)",
+                f"{greeks['rho']:.4f}",
+                help="Change in option price for 1% change in interest rate"
+            )
+
+        # Greeks interpretation
+        st.markdown("#### Greeks Interpretation")
+
+        delta_interp = f"For every $1 increase in stock price, the option price changes by **${abs(greeks['delta']):.4f}**"
+        gamma_interp = f"Delta changes by **{greeks['gamma']:.4f}** for each $1 move in stock price"
+        theta_interp = f"Option loses **${abs(greeks['theta']):.4f}** in value per day"
+        vega_interp = f"Option price changes by **${greeks['vega']:.4f}** for each 1% change in volatility"
+
+        st.write(f"**Delta:** {delta_interp}")
+        st.write(f"**Gamma:** {gamma_interp}")
+        st.write(f"**Theta:** {theta_interp}")
+        st.write(f"**Vega:** {vega_interp}")
+
+        # Payoff diagram
+        st.markdown("---")
+        st.subheader("📊 Payoff Diagram at Expiration")
+
+        # Create range of stock prices
+        S_range = np.linspace(S * 0.7, S * 1.3, 100)
+
+        # Calculate payoff (assuming option bought at theoretical price)
+        payoff_long = option_payoff(S_range, K, option_price, option_type, 'long')
+        payoff_short = option_payoff(S_range, K, option_price, option_type, 'short')
+
+        # Plot
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            x=S_range,
+            y=payoff_long,
+            mode='lines',
+            name=f'Long {option_type.capitalize()}',
+            line=dict(color='green', width=2)
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=S_range,
+            y=payoff_short,
+            mode='lines',
+            name=f'Short {option_type.capitalize()}',
+            line=dict(color='red', width=2)
+        ))
+
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+
+        # Add current price line
+        fig.add_vline(x=S, line_dash="dot", line_color="blue", opacity=0.5, annotation_text="Current Price")
+
+        # Add strike line
+        fig.add_vline(x=K, line_dash="dot", line_color="orange", opacity=0.5, annotation_text="Strike")
+
+        fig.update_layout(
+            title=f"{option_type.capitalize()} Option Payoff at Expiration",
+            xaxis_title="Stock Price at Expiration ($)",
+            yaxis_title="Profit/Loss ($)",
+            hovermode='x unified',
+            height=500
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Break-even analysis
+        if option_type == 'call':
+            breakeven = K + option_price
+            max_loss = option_price
+            max_gain = "Unlimited"
+        else:
+            breakeven = K - option_price
+            max_loss = option_price
+            max_gain = f"${K - option_price:.2f}"
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Break-Even Price", f"${breakeven:.2f}")
+        with col2:
+            st.metric("Max Loss (Long)", f"${max_loss:.2f}")
+        with col3:
+            st.metric("Max Gain (Long)", max_gain)
+
+    #---------- TAB 2: OPTIONS STRATEGY BUILDER ----------
+    with tab2:
+        st.subheader("Multi-Leg Options Strategy Builder")
+        st.info("🚧 Coming Soon: Build complex strategies like spreads, straddles, iron condors, and more!")
+
+        # Preview of strategies
+        st.markdown("### Popular Strategies")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("#### Bull Call Spread")
+            st.write("• Buy Call (lower strike)")
+            st.write("• Sell Call (higher strike)")
+            st.write("• Limited risk, limited reward")
+
+        with col2:
+            st.markdown("#### Straddle")
+            st.write("• Buy Call (ATM)")
+            st.write("• Buy Put (ATM)")
+            st.write("• Profit from volatility")
+
+        with col3:
+            st.markdown("#### Iron Condor")
+            st.write("• Sell Call & Put (ATM)")
+            st.write("• Buy Call & Put (OTM)")
+            st.write("• Profit from low volatility")
+
+    #---------- TAB 3: GREEKS SURFACE ----------
+    with tab3:
+        st.subheader("Greeks Surface Visualization")
+
+        greek_to_plot = st.selectbox(
+            "Select Greek to Visualize",
+            ["Delta", "Gamma", "Theta", "Vega"],
+            key='greek_surface'
+        )
+
+        # Use parameters from tab1 or defaults
+        S_surface = st.slider("Current Stock Price", 50.0, 200.0, 100.0, 5.0, key='surface_S')
+        T_days = st.slider("Days to Expiration", 1, 180, 30, 1, key='surface_T')
+        r_surface = st.slider("Risk-Free Rate (%)", 0.0, 10.0, 5.0, 0.5, key='surface_r') / 100
+        option_type_surface = st.selectbox("Option Type", ["call", "put"], key='surface_type')
+
+        if st.button("Generate Greeks Surface", type="primary", key='gen_surface'):
+            with st.spinner("Generating 3D surface..."):
+                # Create meshgrid
+                strikes = np.linspace(S_surface * 0.7, S_surface * 1.3, 30)
+                volatilities = np.linspace(0.1, 1.0, 30)
+                K_grid, Sigma_grid = np.meshgrid(strikes, volatilities)
+
+                # Calculate Greeks
+                Greek_grid = np.zeros_like(K_grid)
+                T_years = T_days / 365.0
+
+                for i in range(len(volatilities)):
+                    for j in range(len(strikes)):
+                        greeks = calculate_greeks(
+                            S_surface,
+                            strikes[j],
+                            T_years,
+                            r_surface,
+                            volatilities[i],
+                            option_type_surface
+                        )
+                        Greek_grid[i, j] = greeks[greek_to_plot.lower()]
+
+                # Plot 3D surface
+                fig = go.Figure(data=[go.Surface(
+                    x=K_grid,
+                    y=Sigma_grid * 100,  # Convert to percentage
+                    z=Greek_grid,
+                    colorscale='Viridis'
+                )])
+
+                fig.update_layout(
+                    title=f"{greek_to_plot} Surface for {option_type_surface.capitalize()} Option",
+                    scene=dict(
+                        xaxis_title="Strike Price ($)",
+                        yaxis_title="Volatility (%)",
+                        zaxis_title=greek_to_plot
+                    ),
+                    height=600
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.caption(f"**Spot Price:** ${S_surface} | **Days to Expiration:** {T_days} | **Risk-Free Rate:** {r_surface*100:.1f}%")
+
+    #---------- TAB 4: IMPLIED VOLATILITY ----------
+    with tab4:
+        st.subheader("Implied Volatility Calculator")
+        st.caption("Calculate implied volatility from market option prices")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### Input Parameters")
+
+            S_iv = st.number_input("Current Stock Price ($)", value=100.0, min_value=0.01, step=1.0, key='iv_S')
+            K_iv = st.number_input("Strike Price ($)", value=100.0, min_value=0.01, step=1.0, key='iv_K')
+            T_iv = st.number_input("Time to Expiration (days)", value=30, min_value=1, step=1, key='iv_T') / 365.0
+            r_iv = st.number_input("Risk-Free Rate (%)", value=5.0, min_value=0.0, max_value=20.0, step=0.1, key='iv_r') / 100
+            option_price_iv = st.number_input("Market Option Price ($)", value=5.0, min_value=0.01, step=0.1, key='iv_price')
+            option_type_iv = st.selectbox("Option Type", ["call", "put"], key='iv_type')
+
+        with col2:
+            st.markdown("#### Results")
+
+            if st.button("Calculate Implied Volatility", type="primary", key='calc_iv'):
+                with st.spinner("Calculating implied volatility..."):
+                    iv = implied_volatility(option_price_iv, S_iv, K_iv, T_iv, r_iv, option_type_iv)
+
+                    if iv is not None:
+                        st.success("✅ Convergence achieved!")
+                        st.metric("Implied Volatility", f"{iv * 100:.2f}%")
+
+                        # Calculate option price with IV
+                        calculated_price = black_scholes(S_iv, K_iv, T_iv, r_iv, iv, option_type_iv)
+                        st.metric("Recalculated Price", f"${calculated_price:.4f}")
+                        st.caption(f"Market Price: ${option_price_iv:.4f} | Difference: ${abs(calculated_price - option_price_iv):.4f}")
+
+                        # Compare to historical volatility
+                        st.markdown("---")
+                        st.markdown("#### Implied vs Historical Volatility")
+                        st.info("💡 High implied volatility suggests the market expects large price movements")
+
+                        # Fetch historical volatility if ticker was used
+                        if fetch_price and ticker_input and stock_info:
+                            hist_data = get_historical_data([ticker_input], period='1y')
+                            if not hist_data.empty:
+                                returns = hist_data[ticker_input].pct_change().dropna()
+                                hist_vol = returns.std() * np.sqrt(252)
+
+                                col_a, col_b = st.columns(2)
+                                with col_a:
+                                    st.metric("Implied Volatility", f"{iv * 100:.2f}%")
+                                with col_b:
+                                    st.metric("Historical Volatility (1Y)", f"{hist_vol * 100:.2f}%")
+
+                                vol_ratio = iv / hist_vol
+                                if vol_ratio > 1.2:
+                                    st.warning(f"⚠️ Options are expensive! IV is {((vol_ratio - 1) * 100):.1f}% higher than historical")
+                                elif vol_ratio < 0.8:
+                                    st.success(f"✅ Options are cheap! IV is {((1 - vol_ratio) * 100):.1f}% lower than historical")
+                                else:
+                                    st.info("ℹ️ IV is fairly priced relative to historical volatility")
+                    else:
+                        st.error("❌ Failed to converge. Check input parameters.")
+
+        st.markdown("---")
+        st.markdown("### Understanding Implied Volatility")
+        st.write("""
+        **Implied Volatility (IV)** is the market's forecast of a likely movement in a security's price.
+        It's derived from the option's market price using the Black-Scholes model.
+
+        - **High IV**: Market expects large price swings (options are expensive)
+        - **Low IV**: Market expects small price movements (options are cheap)
+        - **IV > Historical Vol**: Options may be overpriced
+        - **IV < Historical Vol**: Options may be underpriced
+        """)
 
 # Footer
 st.markdown("---")
