@@ -9,19 +9,28 @@ AI-powered finance analytics platform for market predictions, risk management, a
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.9 or higher
+- Python 3.9+ (Python 3.11 recommended)
 - pip package manager
+- Git (for cloning the repository)
 
 ### Installation
 
-1. **Navigate to the project directory:**
+1. **Clone the repository:**
 ```bash
-cd "C:\Users\jonathan.day\Documents\HedgeAbove"
+git clone <repository-url>
+cd HedgeAbove
 ```
 
 2. **Create a virtual environment:**
+
+Windows:
 ```bash
 python -m venv venv
+```
+
+Mac/Linux:
+```bash
+python3 -m venv venv
 ```
 
 3. **Activate the virtual environment:**
@@ -55,145 +64,191 @@ The app will automatically open at `http://localhost:8501`
 
 ```
 HedgeAbove/
-├── app.py                    # Main Streamlit application
+├── app.py                    # Main Streamlit application (all-in-one)
 ├── requirements.txt          # Python dependencies
-├── .env.example             # Example environment variables
+├── hedge_above_logo.png     # Application logo
 ├── .gitignore               # Git ignore rules
-├── PROJECT_OPTIONS.md       # Detailed project planning document
 ├── README.md                # This file
 │
-├── pages/                   # Multi-page Streamlit app (coming soon)
-│   ├── 1_Portfolio.py
-│   ├── 2_Risk_Analytics.py
-│   ├── 3_Predictions.py
-│   └── 4_Options.py
+├── venv/                    # Virtual environment (created during setup)
 │
-├── src/                     # Source code modules (coming soon)
-│   ├── data/               # Data fetching and processing
-│   ├── models/             # ML models
-│   ├── analytics/          # Risk calculations
-│   └── utils/              # Utility functions
+├── .streamlit/              # Streamlit configuration (optional)
+│   └── config.toml
 │
-├── models/                  # Saved ML models
-├── data/                    # Cached market data
-└── tests/                   # Unit tests
+├── .env                     # Environment variables (optional, not in git)
+│
+├── models/                  # Saved ML models (auto-created)
+├── data/                    # Cached market data (auto-created)
+└── tests/                   # Unit tests (coming soon)
 ```
+
+**Note:** Currently, all functionality is contained in `app.py` as a single-file Streamlit application. Future versions may split into multiple modules.
 
 ---
 
-## 🎯 Current Features (MVP Demo)
+## 🎯 Current Features
 
 ### ✅ Implemented
-- **Home Dashboard** - Overview of features
-- **Portfolio Tracker** - Sample portfolio with P&L tracking
-- **Risk Analytics** - VaR, correlation matrix, Sharpe ratio (demo)
-- **AI Predictions** - ML prediction interface with visualizations (demo)
-- **Options Calculator** - P&L diagrams and break-even analysis (demo)
-- **Hedging Strategies** - AI-recommended hedge strategies (demo)
+- **Stock Screener** - Comprehensive fundamental analysis
+  - 2,535+ global stocks (Russell 2000 + International)
+  - 50+ fundamental metrics (BVPS, EPS, ROE, ROIC, margins, etc.)
+  - 4 screening presets (Value, Growth, Quality, Dividend)
+  - Advanced filtering by valuation and profitability
+  - 6 organized tabs for different metric categories
+  - Analyst targets and recommendations
 
-### 🚧 Coming Soon (Next 8 Weeks)
-- Real market data integration (yfinance, Alpha Vantage)
-- Working ML prediction models (LSTM, Prophet)
-- Actual risk calculations (VaR, portfolio optimization)
+- **Portfolio Builder** - Real-time portfolio management
+  - Add/Edit/Delete positions with live market data
+  - Automatic P&L tracking via yfinance
+  - Quick-add from screener
+
+- **Risk Analytics** - Comprehensive risk calculations
+  - Value at Risk (Historical, Parametric, Monte Carlo)
+  - Expected Shortfall (CVaR)
+  - Correlation matrices and heatmaps
+  - Portfolio metrics (Sharpe, beta, volatility)
+
+- **Portfolio Optimization** - Modern Portfolio Theory
+  - Efficient Frontier visualization
+  - Max Sharpe Ratio optimization
+  - Minimum Volatility optimization
+  - Target Return optimization
+  - Risk Parity allocation
+
+- **AI Predictions** - Time series forecasting
+  - LSTM neural networks
+  - Facebook Prophet
+  - ARIMA with auto parameter selection
+  - Ensemble models
+
+- **Advanced Models** - Sophisticated analytics
+  - ARCH/GARCH volatility modeling
+  - Copula analysis for tail dependence
+  - Regime detection
+  - Monte Carlo simulations
+
+### 🚧 Coming Soon (Next 4-6 Weeks)
 - Options pricing with Greeks (Black-Scholes)
+- Enhanced backtesting framework
 - User authentication and data persistence
-- Freemium subscription system
+- Freemium subscription gates
+- Data export (CSV/Excel)
+- Email/SMS alerts
 
 ---
 
 ## 📅 Development Roadmap
 
-### Week 1-2: Foundation
+### Week 1-2: Foundation ✅ COMPLETE
 - [x] Project setup and Streamlit demo
-- [ ] Market data integration (yfinance)
-- [ ] Portfolio data model and CRUD operations
-- [ ] Database setup (SQLite or PostgreSQL)
+- [x] Market data integration (yfinance)
+- [x] Portfolio data model and CRUD operations
+- [x] Comprehensive stock screener (2,535+ stocks)
 
-### Week 3-4: Risk Analytics
-- [ ] Implement VaR calculations (Historical, Monte Carlo)
-- [ ] Correlation matrix from real data
-- [ ] Portfolio metrics (Sharpe, beta, volatility)
-- [ ] Efficient frontier and optimization
+### Week 3-4: Risk Analytics ✅ COMPLETE
+- [x] Implement VaR calculations (Historical, Parametric, Monte Carlo)
+- [x] Expected Shortfall (CVaR)
+- [x] Correlation matrix from real data
+- [x] Portfolio metrics (Sharpe, beta, volatility)
+- [x] Efficient frontier and optimization
 
-### Week 5-6: AI/ML Models
-- [ ] Data pipeline for training
-- [ ] LSTM model for price prediction
-- [ ] Facebook Prophet integration
-- [ ] Ensemble model combining multiple approaches
-- [ ] Backtesting framework
+### Week 5-6: AI/ML Models ✅ COMPLETE
+- [x] Data pipeline for training
+- [x] LSTM model for price prediction
+- [x] Facebook Prophet integration
+- [x] ARIMA with auto parameter selection
+- [x] ARCH/GARCH volatility models
+- [x] Copula analysis for tail risk
+- [x] Ensemble model combining multiple approaches
 
-### Week 7: Options & Hedging
+### Week 7: Options & Hedging 🚧 IN PROGRESS
 - [ ] Black-Scholes options pricing
-- [ ] Greeks calculator
-- [ ] Options strategy builder
+- [ ] Greeks calculator (Delta, Gamma, Theta, Vega, Rho)
+- [ ] Options strategy builder (Straddles, Spreads, Collars)
 - [ ] Portfolio hedge recommendations
 
-### Week 8: Polish & Launch
+### Week 8: Polish & Launch 🔜 NEXT
 - [ ] User authentication (Streamlit Authenticator)
 - [ ] Freemium gates (usage limits)
+- [ ] Database setup for data persistence
 - [ ] UI/UX improvements
-- [ ] Documentation
+- [ ] Documentation and tutorials
 - [ ] Beta testing and deployment
 
 ---
 
-## 🔑 API Keys Required
+## 🔑 API Keys (Optional)
 
-To use real market data, you'll need API keys from:
+HedgeAbove works out-of-the-box with **Yahoo Finance** via yfinance - no API keys required!
 
-1. **Alpha Vantage** (Free tier: 5 calls/min, 500 calls/day)
+### Optional API Keys (for extended functionality):
+
+1. **Alpha Vantage** (Optional - for alternative data sources)
+   - Free tier: 5 calls/min, 500 calls/day
    - Sign up: https://www.alphavantage.co/support/#api-key
    - Add to `.env`: `ALPHA_VANTAGE_API_KEY=your_key`
 
-2. **Polygon.io** (Free tier: 5 calls/min)
+2. **Polygon.io** (Optional - for real-time enterprise data)
+   - Free tier: 5 calls/min
    - Sign up: https://polygon.io/
    - Add to `.env`: `POLYGON_API_KEY=your_key`
 
-3. **Yahoo Finance** (via yfinance - no key required)
-   - Free, unlimited for delayed data
-
-Copy `.env.example` to `.env` and fill in your keys:
+### Setting up environment variables (optional):
 ```bash
-cp .env.example .env
+# Create .env file in project root
+echo "ALPHA_VANTAGE_API_KEY=your_key_here" > .env
+echo "POLYGON_API_KEY=your_key_here" >> .env
 ```
+
+**Note:** The app currently uses yfinance for all data, so API keys are not required for basic functionality.
 
 ---
 
-## 💡 Usage Examples
+## 💡 Usage Guide
 
-### Adding a Portfolio Position
-```python
-import yfinance as yf
+HedgeAbove is a Streamlit web application - no coding required! Simply run the app and use the web interface.
 
-# Fetch real-time data
-ticker = yf.Ticker("AAPL")
-current_price = ticker.info['currentPrice']
+### 1. Stock Screener
+- Select **Stock Screener** from the sidebar
+- Choose a screening strategy preset (Value, Growth, Quality, Dividend)
+- Adjust filters (sector, P/E, ROE, ROIC, etc.)
+- Browse results across 6 organized tabs
+- Add stocks directly to your portfolio
 
-# Add to portfolio
-portfolio.add_position("AAPL", shares=50, avg_price=150.00)
-```
+### 2. Portfolio Builder
+- Select **Portfolio Builder** from the sidebar
+- Enter a stock ticker (e.g., AAPL, MSFT, TSLA)
+- Specify shares and purchase price
+- View real-time P&L and portfolio value
 
-### Running ML Prediction
-```python
-from src.models.lstm_predictor import LSTMPredictor
+### 3. Risk Analytics
+- Select **Risk Analytics** from the sidebar
+- View VaR (Historical, Parametric, Monte Carlo)
+- Analyze correlation matrix and portfolio metrics
+- See Expected Shortfall (CVaR)
 
-# Train model
-predictor = LSTMPredictor(symbol="AAPL")
-predictor.train(periods=252)  # 1 year of data
+### 4. Portfolio Optimization
+- Select **Portfolio Optimization** from the sidebar
+- Visualize Efficient Frontier
+- Find optimal allocations (Max Sharpe, Min Volatility, etc.)
+- Implement Risk Parity strategies
 
-# Make prediction
-forecast = predictor.predict(horizon=30)  # 30 days ahead
-```
+### 5. AI Predictions
+- Select **AI Predictions** from the sidebar
+- Choose a ticker and prediction model (LSTM, Prophet, ARIMA, etc.)
+- Set forecast horizon
+- View predictions with confidence intervals
 
-### Calculating VaR
-```python
-from src.analytics.risk import calculate_var
+### Command Line Usage (Advanced)
+```bash
+# Run the app
+streamlit run app.py
 
-# Historical VaR
-var_95 = calculate_var(portfolio, confidence=0.95, method='historical')
+# Run on a specific port
+streamlit run app.py --server.port 8502
 
-# Monte Carlo VaR
-var_95_mc = calculate_var(portfolio, confidence=0.95, method='monte_carlo', simulations=10000)
+# Run with custom config
+streamlit run app.py --server.headless true
 ```
 
 ---
@@ -284,11 +339,12 @@ This project is proprietary. All rights reserved.
 
 ## 🐛 Known Issues
 
-- [ ] Demo data only - no real market integration yet
-- [ ] ML models not trained - showing simulated predictions
 - [ ] No user authentication - single-user mode only
-- [ ] Options pricing uses placeholder values
-- [ ] No data persistence between sessions
+- [ ] No data persistence between sessions (portfolio resets on refresh)
+- [ ] Options pricing and Greeks not yet implemented
+- [ ] Large screener queries (100+ stocks) can take 1-2 minutes
+- [ ] Some international stocks may have incomplete fundamental data
+- [ ] pmdarima not compatible with Python 3.13+ (falls back to statsmodels)
 
 ---
 
@@ -330,8 +386,8 @@ For questions or issues:
 
 ---
 
-**Ready to rise above market uncertainty? Let's build HedgeAbove! 📈**
+**Ready to rise above market uncertainty? 📈**
 
 ---
 
-*Last Updated: 2025-11-11*
+*Last Updated: 2025-01-11*

@@ -73,11 +73,11 @@ def get_historical_data(symbols, period='1y'):
 
 @st.cache_data(ttl=300)
 def get_stock_info(symbol):
-    """Fetch detailed stock information"""
+    """Fetch comprehensive stock information with all fundamental metrics"""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
-        hist = ticker.history(period='1y')
+        hist = ticker.history(period='5y')  # Extended history
 
         if hist.empty:
             return None
@@ -85,24 +85,86 @@ def get_stock_info(symbol):
         current_price = hist['Close'].iloc[-1]
 
         stock_data = {
+            # Basic Info
             'symbol': symbol,
             'name': info.get('longName', symbol),
+            'sector': info.get('sector', 'N/A'),
+            'industry': info.get('industry', 'N/A'),
+
+            # Price Data
             'current_price': current_price,
             'previous_close': info.get('previousClose', current_price),
             'open': info.get('open', current_price),
             'day_high': info.get('dayHigh', current_price),
             'day_low': info.get('dayLow', current_price),
             'volume': info.get('volume', 0),
-            'market_cap': info.get('marketCap', 0),
-            'pe_ratio': info.get('trailingPE', None),
-            'dividend_yield': info.get('dividendYield', 0),
             '52_week_high': info.get('fiftyTwoWeekHigh', current_price),
             '52_week_low': info.get('fiftyTwoWeekLow', current_price),
-            'sector': info.get('sector', 'N/A'),
-            'industry': info.get('industry', 'N/A')
+
+            # Valuation Metrics
+            'market_cap': info.get('marketCap', 0),
+            'enterprise_value': info.get('enterpriseValue', 0),
+            'pe_ratio': info.get('trailingPE', None),
+            'forward_pe': info.get('forwardPE', None),
+            'peg_ratio': info.get('pegRatio', None),
+            'price_to_book': info.get('priceToBook', None),
+            'price_to_sales': info.get('priceToSalesTrailing12Months', None),
+            'ev_to_revenue': info.get('enterpriseToRevenue', None),
+            'ev_to_ebitda': info.get('enterpriseToEbitda', None),
+
+            # Per Share Metrics
+            'eps_ttm': info.get('trailingEps', None),
+            'eps_forward': info.get('forwardEps', None),
+            'book_value_per_share': info.get('bookValue', None),  # BVPS
+            'revenue_per_share': info.get('revenuePerShare', None),
+            'free_cash_flow_per_share': info.get('freeCashflow', 0) / info.get('sharesOutstanding', 1) if info.get('sharesOutstanding') else None,
+
+            # Growth Metrics
+            'earnings_growth': info.get('earningsGrowth', None),
+            'earnings_quarterly_growth': info.get('earningsQuarterlyGrowth', None),
+            'revenue_growth': info.get('revenueGrowth', None),
+
+            # Profitability Metrics
+            'profit_margin': info.get('profitMargins', None),
+            'operating_margin': info.get('operatingMargins', None),
+            'gross_margin': info.get('grossMargins', None),
+            'ebitda_margin': info.get('ebitdaMargins', None),
+            'roe': info.get('returnOnEquity', None),  # ROE
+            'roa': info.get('returnOnAssets', None),  # ROA
+            'roic': info.get('returnOnCapital', None),  # ROIC
+
+            # Dividend Metrics
+            'dividend_yield': info.get('dividendYield', 0),
+            'dividend_rate': info.get('dividendRate', 0),
+            'payout_ratio': info.get('payoutRatio', None),
+            'five_year_avg_div_yield': info.get('fiveYearAvgDividendYield', None),
+
+            # Financial Health
+            'current_ratio': info.get('currentRatio', None),
+            'quick_ratio': info.get('quickRatio', None),
+            'debt_to_equity': info.get('debtToEquity', None),
+            'total_debt': info.get('totalDebt', 0),
+            'total_cash': info.get('totalCash', 0),
+            'free_cash_flow': info.get('freeCashflow', 0),
+            'operating_cash_flow': info.get('operatingCashflow', 0),
+
+            # Analyst Estimates
+            'target_mean_price': info.get('targetMeanPrice', None),
+            'target_high_price': info.get('targetHighPrice', None),
+            'target_low_price': info.get('targetLowPrice', None),
+            'recommendation': info.get('recommendationKey', 'N/A'),
+            'number_of_analysts': info.get('numberOfAnalystOpinions', 0),
+
+            # Additional
+            'beta': info.get('beta', None),
+            'shares_outstanding': info.get('sharesOutstanding', 0),
+            'float_shares': info.get('floatShares', 0),
+            'shares_short': info.get('sharesShort', 0),
+            'short_ratio': info.get('shortRatio', None),
+            'short_percent': info.get('shortPercentOfFloat', None)
         }
         return stock_data
-    except:
+    except Exception as e:
         return None
 
 @st.cache_data(ttl=3600)
@@ -1031,86 +1093,356 @@ if page == "Home":
 #==================== STOCK SCREENER ====================
 
 elif page == "Stock Screener":
-    st.header("🔍 Stock Screener")
+    st.header("🔍 Comprehensive Stock Screener")
+    st.caption("Screen 2,535+ global stocks with 50+ fundamental metrics")
 
-    st.subheader("S&P 500 Universe (~200+ stocks)")
-
-    # Filters
-    col1, col2, col3 = st.columns(3)
+    # Screening Presets
+    st.subheader("📋 Screening Strategy")
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        sector_filter = st.multiselect(
-            "Sector",
-            ["Technology", "Healthcare", "Financials", "Consumer Discretionary", "Consumer Staples",
-             "Energy", "Industrials", "Communication Services", "Utilities", "Real Estate",
-             "Materials", "All"],
-            default=["All"]
-        )
-
+        if st.button("🎯 Value Stocks", use_container_width=True):
+            st.session_state.screen_preset = "value"
     with col2:
-        cap_filter = st.multiselect(
-            "Market Cap",
-            ["Mega Cap (>$200B)", "Large Cap ($10B-$200B)", "Mid Cap ($2B-$10B)", "All"],
-            default=["All"]
-        )
-
+        if st.button("📈 Growth Stocks", use_container_width=True):
+            st.session_state.screen_preset = "growth"
     with col3:
-        results_limit = st.slider("Max Results to Display", 10, 100, 30, step=10)
+        if st.button("💎 Quality Stocks", use_container_width=True):
+            st.session_state.screen_preset = "quality"
+    with col4:
+        if st.button("💰 Dividend Stocks", use_container_width=True):
+            st.session_state.screen_preset = "dividend"
+
+    # Initialize preset
+    if 'screen_preset' not in st.session_state:
+        st.session_state.screen_preset = None
+
+    st.markdown("---")
+
+    # Filters Section
+    with st.expander("🔧 Screening Filters", expanded=True):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("**Basic Filters**")
+            sector_filter = st.multiselect(
+                "Sector",
+                ["Technology", "Healthcare", "Financials", "Consumer Discretionary", "Consumer Staples",
+                 "Energy", "Industrials", "Communication Services", "Utilities", "Real Estate",
+                 "Materials", "All"],
+                default=["All"]
+            )
+
+            results_limit = st.slider("Max Results", 10, 200, 50, step=10)
+
+        with col2:
+            st.markdown("**Valuation Filters**")
+            pe_min = st.number_input("P/E Min", value=0.0, step=1.0)
+            pe_max = st.number_input("P/E Max", value=100.0, step=1.0)
+            pb_min = st.number_input("P/B Min", value=0.0, step=0.1)
+            pb_max = st.number_input("P/B Max", value=10.0, step=0.1)
+
+        with col3:
+            st.markdown("**Profitability Filters**")
+            roe_min = st.number_input("ROE Min (%)", value=0.0, step=1.0)
+            roic_min = st.number_input("ROIC Min (%)", value=0.0, step=1.0)
+            profit_margin_min = st.number_input("Profit Margin Min (%)", value=0.0, step=1.0)
+
+    # Apply preset filters
+    if st.session_state.screen_preset == "value":
+        st.info("🎯 **Value Strategy**: Low P/E (<15), Low P/B (<3), High Dividend Yield (>2%)")
+        pe_max = 15.0
+        pb_max = 3.0
+    elif st.session_state.screen_preset == "growth":
+        st.info("📈 **Growth Strategy**: High Earnings Growth (>15%), High Revenue Growth (>10%), High ROE (>15%)")
+        roe_min = 15.0
+    elif st.session_state.screen_preset == "quality":
+        st.info("💎 **Quality Strategy**: High ROIC (>15%), High Profit Margin (>10%), Low Debt/Equity (<50%)")
+        roic_min = 15.0
+        profit_margin_min = 10.0
+    elif st.session_state.screen_preset == "dividend":
+        st.info("💰 **Dividend Strategy**: High Dividend Yield (>3%), Payout Ratio <70%, Positive Cash Flow")
+
+    st.markdown("---")
 
     # Get tickers
     all_tickers = get_sp500_tickers()
 
-    # Apply sector filter (will use real sector data from yfinance)
-    st.markdown("---")
-
     if len(all_tickers) > 0:
         # Fetch data for tickers
-        with st.spinner(f"Fetching data for up to {results_limit} stocks..."):
+        with st.spinner(f"📊 Fetching comprehensive data for up to {results_limit} stocks... (This may take 30-60 seconds)"):
             screener_data = []
-            for ticker in all_tickers[:results_limit]:  # Limit API calls
+            progress_bar = st.progress(0)
+
+            for idx, ticker in enumerate(all_tickers[:results_limit]):
                 stock_info = get_stock_info(ticker)
                 if stock_info:
-                    # Apply filters
+                    # Apply sector filter
                     if "All" not in sector_filter:
                         if stock_info['sector'] not in sector_filter:
                             continue
 
+                    # Apply valuation filters
+                    if stock_info['pe_ratio']:
+                        if stock_info['pe_ratio'] < pe_min or stock_info['pe_ratio'] > pe_max:
+                            continue
+
+                    if stock_info['price_to_book']:
+                        if stock_info['price_to_book'] < pb_min or stock_info['price_to_book'] > pb_max:
+                            continue
+
+                    # Apply profitability filters
+                    if stock_info['roe']:
+                        if stock_info['roe'] * 100 < roe_min:
+                            continue
+
+                    if stock_info['roic']:
+                        if stock_info['roic'] * 100 < roic_min:
+                            continue
+
+                    if stock_info['profit_margin']:
+                        if stock_info['profit_margin'] * 100 < profit_margin_min:
+                            continue
+
+                    # Build comprehensive screener row
                     screener_data.append({
+                        # Basic Info
                         'Symbol': ticker,
-                        'Company': stock_info['name'],
+                        'Company': stock_info['name'][:30],  # Truncate long names
                         'Sector': stock_info['sector'],
                         'Price': stock_info['current_price'],
-                        'Market Cap': stock_info['market_cap'],
-                        'P/E': stock_info['pe_ratio'] if stock_info['pe_ratio'] else None,
-                        'Div Yield %': stock_info['dividend_yield'] * 100 if stock_info['dividend_yield'] else 0
+                        'Mkt Cap': stock_info['market_cap'],
+
+                        # Valuation Metrics
+                        'P/E': stock_info['pe_ratio'],
+                        'Fwd P/E': stock_info['forward_pe'],
+                        'PEG': stock_info['peg_ratio'],
+                        'P/B': stock_info['price_to_book'],
+                        'P/S': stock_info['price_to_sales'],
+                        'EV/EBITDA': stock_info['ev_to_ebitda'],
+
+                        # Per Share Metrics
+                        'BVPS': stock_info['book_value_per_share'],
+                        'EPS (TTM)': stock_info['eps_ttm'],
+                        'EPS (Fwd)': stock_info['eps_forward'],
+
+                        # Growth Metrics
+                        'EPS Growth': stock_info['earnings_growth'] * 100 if stock_info['earnings_growth'] else None,
+                        'Rev Growth': stock_info['revenue_growth'] * 100 if stock_info['revenue_growth'] else None,
+
+                        # Profitability Metrics
+                        'ROE': stock_info['roe'] * 100 if stock_info['roe'] else None,
+                        'ROA': stock_info['roa'] * 100 if stock_info['roa'] else None,
+                        'ROIC': stock_info['roic'] * 100 if stock_info['roic'] else None,
+                        'Profit Margin': stock_info['profit_margin'] * 100 if stock_info['profit_margin'] else None,
+                        'Operating Margin': stock_info['operating_margin'] * 100 if stock_info['operating_margin'] else None,
+                        'Gross Margin': stock_info['gross_margin'] * 100 if stock_info['gross_margin'] else None,
+
+                        # Dividend Metrics
+                        'Div Yield': stock_info['dividend_yield'] * 100 if stock_info['dividend_yield'] else 0,
+                        'Payout Ratio': stock_info['payout_ratio'] * 100 if stock_info['payout_ratio'] else None,
+
+                        # Financial Health
+                        'Current Ratio': stock_info['current_ratio'],
+                        'D/E Ratio': stock_info['debt_to_equity'],
+                        'FCF': stock_info['free_cash_flow'],
+
+                        # Analyst Data
+                        'Target Price': stock_info['target_mean_price'],
+                        'Upside': ((stock_info['target_mean_price'] / stock_info['current_price']) - 1) * 100 if stock_info['target_mean_price'] and stock_info['current_price'] else None,
+                        'Rating': stock_info['recommendation'],
+
+                        # Additional
+                        'Beta': stock_info['beta']
                     })
+
+                # Update progress
+                progress_bar.progress((idx + 1) / min(results_limit, len(all_tickers)))
+
+            progress_bar.empty()
 
         if screener_data:
             screener_df = pd.DataFrame(screener_data)
 
-            # Display count by sector
-            st.subheader(f"📊 Found {len(screener_df)} stocks")
-
-            sector_counts = screener_df['Sector'].value_counts()
-            col1, col2 = st.columns([2, 1])
-
+            # Display summary metrics
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
-                # Main screener table
+                st.metric("📊 Stocks Found", len(screener_df))
+            with col2:
+                avg_pe = screener_df['P/E'].mean()
+                st.metric("Avg P/E", f"{avg_pe:.2f}" if pd.notna(avg_pe) else "N/A")
+            with col3:
+                avg_roe = screener_df['ROE'].mean()
+                st.metric("Avg ROE", f"{avg_roe:.1f}%" if pd.notna(avg_roe) else "N/A")
+            with col4:
+                avg_div = screener_df['Div Yield'].mean()
+                st.metric("Avg Div Yield", f"{avg_div:.2f}%" if pd.notna(avg_div) else "N/A")
+
+            st.markdown("---")
+
+            # Tabbed view for different metric categories
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+                "📊 Overview",
+                "💵 Valuation",
+                "📈 Growth & Profitability",
+                "💰 Dividends",
+                "🏦 Financial Health",
+                "🎯 Analyst Data"
+            ])
+
+            with tab1:
+                st.subheader("Stock Overview")
+                overview_df = screener_df[[
+                    'Symbol', 'Company', 'Sector', 'Price', 'Mkt Cap',
+                    'P/E', 'ROE', 'Div Yield', 'Beta'
+                ]].copy()
+
                 st.dataframe(
-                    screener_df.style.format({
+                    overview_df.style.format({
                         'Price': '${:.2f}',
-                        'Market Cap': lambda x: f"${x/1e9:.2f}B" if x > 0 else "N/A",
+                        'Mkt Cap': lambda x: f"${x/1e9:.2f}B" if pd.notna(x) and x > 0 else "N/A",
                         'P/E': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
-                        'Div Yield %': '{:.2f}%'
+                        'ROE': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'Div Yield': lambda x: f"{x:.2f}%" if pd.notna(x) else "0.00%",
+                        'Beta': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"
                     }),
                     use_container_width=True,
-                    height=600
+                    height=500
                 )
 
+            with tab2:
+                st.subheader("Valuation Metrics")
+                valuation_df = screener_df[[
+                    'Symbol', 'Company', 'Price', 'P/E', 'Fwd P/E', 'PEG',
+                    'P/B', 'P/S', 'EV/EBITDA', 'BVPS'
+                ]].copy()
+
+                st.dataframe(
+                    valuation_df.style.format({
+                        'Price': '${:.2f}',
+                        'P/E': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'Fwd P/E': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'PEG': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'P/B': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'P/S': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'EV/EBITDA': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'BVPS': lambda x: f"${x:.2f}" if pd.notna(x) else "N/A"
+                    }),
+                    use_container_width=True,
+                    height=500
+                )
+
+                st.caption("**BVPS**: Book Value Per Share | **P/E**: Price-to-Earnings | **PEG**: Price/Earnings to Growth | **P/B**: Price-to-Book | **EV/EBITDA**: Enterprise Value to EBITDA")
+
+            with tab3:
+                st.subheader("Growth & Profitability")
+                growth_df = screener_df[[
+                    'Symbol', 'Company', 'EPS (TTM)', 'EPS (Fwd)', 'EPS Growth', 'Rev Growth',
+                    'ROE', 'ROA', 'ROIC', 'Profit Margin', 'Operating Margin', 'Gross Margin'
+                ]].copy()
+
+                st.dataframe(
+                    growth_df.style.format({
+                        'EPS (TTM)': lambda x: f"${x:.2f}" if pd.notna(x) else "N/A",
+                        'EPS (Fwd)': lambda x: f"${x:.2f}" if pd.notna(x) else "N/A",
+                        'EPS Growth': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'Rev Growth': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'ROE': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'ROA': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'ROIC': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'Profit Margin': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'Operating Margin': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'Gross Margin': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A"
+                    }),
+                    use_container_width=True,
+                    height=500
+                )
+
+                st.caption("**EPS**: Earnings Per Share | **ROE**: Return on Equity | **ROA**: Return on Assets | **ROIC**: Return on Invested Capital")
+
+            with tab4:
+                st.subheader("Dividend Metrics")
+                dividend_df = screener_df[[
+                    'Symbol', 'Company', 'Price', 'Div Yield', 'Payout Ratio',
+                    'EPS (TTM)', 'FCF'
+                ]].copy()
+
+                st.dataframe(
+                    dividend_df.style.format({
+                        'Price': '${:.2f}',
+                        'Div Yield': lambda x: f"{x:.2f}%" if pd.notna(x) else "0.00%",
+                        'Payout Ratio': lambda x: f"{x:.1f}%" if pd.notna(x) else "N/A",
+                        'EPS (TTM)': lambda x: f"${x:.2f}" if pd.notna(x) else "N/A",
+                        'FCF': lambda x: f"${x/1e9:.2f}B" if pd.notna(x) and x > 0 else "N/A"
+                    }),
+                    use_container_width=True,
+                    height=500
+                )
+
+                st.caption("**FCF**: Free Cash Flow | **Payout Ratio**: Dividend / Earnings")
+
+            with tab5:
+                st.subheader("Financial Health")
+                health_df = screener_df[[
+                    'Symbol', 'Company', 'Current Ratio', 'D/E Ratio',
+                    'FCF', 'Beta', 'Mkt Cap'
+                ]].copy()
+
+                st.dataframe(
+                    health_df.style.format({
+                        'Current Ratio': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'D/E Ratio': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'FCF': lambda x: f"${x/1e9:.2f}B" if pd.notna(x) and x > 0 else "N/A",
+                        'Beta': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'Mkt Cap': lambda x: f"${x/1e9:.2f}B" if pd.notna(x) and x > 0 else "N/A"
+                    }),
+                    use_container_width=True,
+                    height=500
+                )
+
+                st.caption("**Current Ratio**: Current Assets / Current Liabilities | **D/E**: Debt-to-Equity Ratio | **Beta**: Market volatility (1.0 = market)")
+
+            with tab6:
+                st.subheader("Analyst Targets & Recommendations")
+                analyst_df = screener_df[[
+                    'Symbol', 'Company', 'Price', 'Target Price', 'Upside', 'Rating'
+                ]].copy()
+
+                st.dataframe(
+                    analyst_df.style.format({
+                        'Price': '${:.2f}',
+                        'Target Price': lambda x: f"${x:.2f}" if pd.notna(x) else "N/A",
+                        'Upside': lambda x: f"{x:+.1f}%" if pd.notna(x) else "N/A"
+                    }),
+                    use_container_width=True,
+                    height=500
+                )
+
+                st.caption("**Upside**: Potential gain to analyst target price | **Rating**: buy, strong_buy, hold, sell, strong_sell")
+
+            # Sector breakdown
+            st.markdown("---")
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+                st.subheader("📊 Sector Distribution")
+                sector_counts = screener_df['Sector'].value_counts()
+                fig = px.bar(
+                    x=sector_counts.values,
+                    y=sector_counts.index,
+                    orientation='h',
+                    labels={'x': 'Count', 'y': 'Sector'},
+                    title="Stocks by Sector"
+                )
+                fig.update_layout(height=400, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+
             with col2:
-                st.write("**Sector Distribution:**")
+                st.write("")
+                st.write("")
+                st.write("")
                 for sector, count in sector_counts.items():
-                    st.write(f"• {sector}: {count}")
+                    st.write(f"**{sector}**: {count}")
 
             # Quick add to portfolio
             st.markdown("---")
