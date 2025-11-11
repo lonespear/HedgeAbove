@@ -203,7 +203,138 @@ def get_sp500_tickers():
 
         # Emerging Growth & Innovation (20 stocks)
         'PLTR', 'IONQ', 'RKLB', 'SPCE', 'OPEN', 'DASH', 'UBER', 'LYFT', 'CVNA', 'CHWY',
-        'CHEWY', 'W', 'FVRR', 'UPWK', 'ZI', 'DOCN', 'APPS', 'BIGC', 'SHOP', 'MELI'
+        'CHEWY', 'W', 'FVRR', 'UPWK', 'ZI', 'DOCN', 'APPS', 'BIGC', 'SHOP', 'MELI',
+
+        # Small-Cap Technology (100 stocks)
+        'SMCI', 'DELL', 'HPQ', 'HPE', 'NTAP', 'WDC', 'STX', 'PSTG', 'CVLT', 'DBX',
+        'BOX', 'MIME', 'TENB', 'VRNS', 'QLYS', 'RPD', 'PLAN', 'BLKB', 'BRZE', 'RELY',
+        'ASAN', 'TASK', 'WDAY', 'PAYC', 'PCTY', 'PYCR', 'EEFT', 'EVTC', 'GDDY', 'WIX',
+        'JFROG', 'AZPN', 'QTWO', 'SMAR', 'ENV', 'APPN', 'CWAN', 'NEWR', 'SUMO', 'SAIC',
+        'LDOS', 'CACI', 'BAH', 'KBR', 'VRSK', 'TRU', 'GMED', 'TDC', 'FTV', 'ZBRA',
+        'SWI', 'NATI', 'ROP', 'KEYS', 'TER', 'COHR', 'II', 'NOVT', 'LITE', 'VIAV',
+        'FORM', 'DIOD', 'MKSI', 'ONTO', 'UCTT', 'PLAB', 'AOSL', 'CRUS', 'CEVA', 'XLNX',
+        'MXIM', 'RMBS', 'SYNA', 'CCMP', 'SMTC', 'MTSI', 'COHU', 'LSCC', 'AMBA', 'MRVL',
+        'CRUS', 'ACLS', 'MLAB', 'PI', 'AMBA', 'MPWR', 'POWI', 'VICR', 'ENPH', 'SEDG',
+        'GNRC', 'RUN', 'NOVA', 'BLDR', 'ATKR', 'APH', 'TEL', 'GLW', 'JBL', 'FN',
+
+        # Small-Cap Healthcare (100 stocks)
+        'TECH', 'PEN', 'WAT', 'MTD', 'DXCM', 'RVTY', 'IQV', 'CRL', 'MEDP', 'SOLV',
+        'VTRS', 'CORT', 'CPRX', 'PRGO', 'TEVA', 'SUPN', 'TMDX', 'KRYS', 'NTRA', 'ADMA',
+        'HALO', 'RARE', 'FOLD', 'ION', 'EDIT', 'CRSP', 'NTLA', 'BEAM', 'VERV', 'PRME',
+        'BLUE', 'SAGE', 'NBIX', 'SRPT', 'BMRN', 'SGEN', 'JAZZ', 'UTHR', 'HZNP', 'ALKS',
+        'ACAD', 'PTCT', 'RGNX', 'TBPH', 'ARVN', 'ARWR', 'MDGL', 'ITCI', 'KRTX', 'SAVA',
+        'AGIO', 'APLS', 'DNLI', 'FATE', 'NRIX', 'VRTX', 'MRTX', 'NVCR', 'GLPG', 'IONS',
+        'EXEL', 'BPMC', 'BGNE', 'LEGN', 'YMAB', 'IMMU', 'ESPR', 'PBYI', 'INSM', 'CLDX',
+        'GOSS', 'RXRX', 'SDGR', 'ALLO', 'BCYC', 'MNOV', 'CDMO', 'VCEL', 'VCYT', 'QGEN',
+        'NVST', 'LMNX', 'MYGN', 'NTRA', 'GKOS', 'SLP', 'NEOG', 'GTHX', 'KRYS', 'AVNS',
+        'OMER', 'PCRX', 'ANIP', 'LBPH', 'AMRX', 'COLL', 'ETNB', 'SGMO', 'EDIT', 'PACB',
+
+        # Small-Cap Financials (100 stocks)
+        'EWBC', 'PACW', 'WAL', 'SIVB', 'SBNY', 'FRC', 'CMA', 'ZION', 'SNV', 'ONB',
+        'UMBF', 'OZK', 'UBSI', 'HWC', 'ASB', 'FHN', 'BKU', 'FIBK', 'WSFS', 'TCBI',
+        'CADE', 'SFNC', 'CASH', 'ABCB', 'VLY', 'PB', 'BANR', 'CATY', 'CBU', 'FFIN',
+        'TBBK', 'SRCE', 'BPOP', 'FBK', 'FULT', 'INDB', 'WAFD', 'PFS', 'UCBI', 'BANF',
+        'LKFN', 'BHLB', 'SFBS', 'HTLF', 'HOMB', 'CVBF', 'CBSH', 'BOKF', 'WTFC', 'ONB',
+        'ENVA', 'BRKL', 'Ryan', 'BGC', 'VIRT', 'LPLA', 'SF', 'PIPR', 'APAM', 'HLNE',
+        'LAZ', 'PJT', 'EVR', 'RYAN', 'JEF', 'MORN', 'MC', 'OMF', 'VRNT', 'CACC',
+        'COOP', 'WRLD', 'TRUP', 'LMND', 'ROOT', 'MTTR', 'KNSL', 'BHF', 'ORI', 'RNR',
+        'AFG', 'WTM', 'SAFT', 'KMPR', 'PLMR', 'THG', 'UFCS', 'NAVG', 'JRVR', 'IGIC',
+        'AGII', 'STC', 'EIG', 'AMSF', 'PRA', 'HRTG', 'UFCS', 'HALL', 'TRIN', 'ANAT',
+
+        # Small-Cap Consumer (100 stocks)
+        'WING', 'BLMN', 'TXRH', 'EAT', 'CAKE', 'PLAY', 'DENN', 'RUTH', 'FWRG', 'BWLD',
+        'SHAK', 'NDLS', 'PZZA', 'DAVE', 'BJRI', 'DIN', 'CBRL', 'BLMN', 'PNRA', 'BWLD',
+        'SON', 'SONC', 'JACK', 'HAYW', 'ARKO', 'CASY', 'LAD', 'ABG', 'SAH', 'AN',
+        'PAG', 'GPI', 'CRMT', 'MNRO', 'AAP', 'AZO', 'ORLY', 'BBWI', 'URBN', 'AEO',
+        'PSMT', 'ANF', 'TLYS', 'CHS', 'GCO', 'HIBB', 'BGFV', 'CTRN', 'SHOO', 'WWW',
+        'BOOT', 'DECK', 'CROX', 'VFC', 'RL', 'PVH', 'HBI', 'GIL', 'SCVL', 'GIII',
+        'MOV', 'EXPR', 'ZUMZ', 'TLRD', 'JWN', 'M', 'KSS', 'DDS', 'CRI', 'BURL',
+        'FIVE', 'DG', 'DLTR', 'BIG', 'OLLI', 'PRTY', 'CONN', 'BBBY', 'TCS', 'BEDS',
+        'ASO', 'BGFV', 'HIBB', 'DKS', 'FL', 'SCVL', 'PIR', 'SIG', 'WGO', 'THO',
+        'CWH', 'LCI', 'LCII', 'PATK', 'BC', 'POWL', 'REVG', 'SHYF', 'HCSG', 'CASY',
+
+        # Small-Cap Energy (75 stocks)
+        'PBF', 'DK', 'CIVI', 'CRC', 'CPE', 'WTI', 'OAS', 'AROC', 'VTLE', 'GPOR',
+        'REI', 'TALO', 'CDEV', 'CLR', 'MTDR', 'FANG', 'PR', 'MUR', 'NBR', 'HP',
+        'NINE', 'SWN', 'RRC', 'CNX', 'AR', 'CTRA', 'MGY', 'REPX', 'CRGY', 'GPRK',
+        'LPI', 'GPRE', 'REX', 'VVV', 'AMPY', 'GRNT', 'ESTE', 'PTEN', 'PUMP', 'LBRT',
+        'NEX', 'WTTR', 'TDW', 'WFRD', 'SDRL', 'VAL', 'TRGP', 'ENLC', 'PAGP', 'USAC',
+        'GEL', 'DKL', 'EPD', 'ET', 'MMP', 'PAA', 'WES', 'AM', 'HESM', 'CEQP',
+        'ENLC', 'NGL', 'SUN', 'SHLX', 'MPLX', 'PSX', 'NS', 'CQP', 'BP', 'E',
+        'TOT', 'SHEL', 'ENB', 'TRP', 'CNQ',
+
+        # Small-Cap Industrials (100 stocks)
+        'JBHT', 'LSTR', 'KNX', 'SAIA', 'ARCB', 'WERN', 'ODFL', 'XPO', 'CVLG', 'YRCW',
+        'GNK', 'SBLK', 'INSW', 'EGLE', 'SHIP', 'CMRE', 'EDRY', 'GOGL', 'NMM', 'SB',
+        'TGH', 'MATX', 'KEX', 'HUBG', 'SNDR', 'FWRD', 'ECHO', 'MRTN', 'ULH', 'HTLD',
+        'SNCY', 'RXO', 'GXO', 'JBLU', 'AAL', 'UAL', 'DAL', 'LUV', 'ALK', 'SAVE',
+        'HA', 'SKYW', 'MESA', 'ATSG', 'AAWW', 'CYRX', 'ARCB', 'SNDR', 'JOBY', 'ACHR',
+        'BLDE', 'LILM', 'EH', 'EVEX', 'EVTL', 'GEV', 'LEV', 'REE', 'WKHS', 'RIDE',
+        'FSR', 'GOEV', 'ARVL', 'MULN', 'ELMS', 'OWLT', 'HYZN', 'NKLA', 'HYLN', 'GP',
+        'RDN', 'MTG', 'ESNT', 'NMIH', 'HCI', 'UVE', 'NODK', 'PRA', 'UFCS', 'KNSL',
+        'AIT', 'DY', 'WSO', 'MSM', 'RBC', 'TILE', 'FLS', 'BMI', 'CR', 'PRIM',
+        'ATKR', 'AAON', 'AOS', 'AWI', 'AZEK', 'BCC', 'BECN', 'BLD', 'BXC', 'CSWI',
+
+        # Small-Cap Materials (75 stocks)
+        'MP', 'LAC', 'ALB', 'SQM', 'LTHM', 'PLL', 'SGML', 'LITM', 'NOVRF', 'CMP',
+        'SMG', 'TUP', 'CATO', 'GFF', 'KOP', 'HWKN', 'FUL', 'HXL', 'SLVM', 'KWR',
+        'NGVT', 'TROX', 'IOSP', 'NEU', 'SXT', 'CSTM', 'OMI', 'GEF', 'SON', 'SLGN',
+        'MERC', 'RPM', 'AXTA', 'HUN', 'OLN', 'TSE', 'KRA', 'VVV', 'CBT', 'CC',
+        'WLK', 'IOSP', 'PCT', 'ESNT', 'NGVT', 'BCPC', 'FUL', 'GRA', 'CENX', 'KALU',
+        'ATI', 'ZEUS', 'HCC', 'HAYN', 'SYNL', 'MTUS', 'CRS', 'TMST', 'WOR', 'MTRN',
+        'CMC', 'CLF', 'STLD', 'RS', 'X', 'MT', 'TX', 'ASTL', 'HEES', 'NEWP',
+        'USLM', 'TGLS', 'HL', 'AG', 'CDE', 'EGO', 'PAAS', 'GPL', 'SVM', 'NGD',
+        'AUY', 'SSRM', 'KGC', 'IAG', 'BTG', 'VALE', 'RIO', 'BHP', 'SCCO', 'FCX',
+        'TECK', 'HBM', 'CMCL', 'VEDL', 'GLNCY',
+
+        # Small-Cap Real Estate (75 stocks)
+        'VRE', 'STWD', 'BXMT', 'AGNC', 'NLY', 'TWO', 'MITT', 'ARR', 'CIM', 'MFA',
+        'NYMT', 'DX', 'PMT', 'EARN', 'IVR', 'RC', 'GPMT', 'ARI', 'TRTX', 'ORC',
+        'LADR', 'AAIC', 'GPMT', 'LOAN', 'RC', 'BRMK', 'RWT', 'CHMI', 'EFC', 'WMC',
+        'NRZ', 'RITM', 'AAMC', 'ABR', 'AJX', 'ACRE', 'MITT', 'KREF', 'TPVG', 'OXSQ',
+        'INN', 'PEB', 'RLJ', 'SHO', 'PK', 'AHT', 'APLE', 'CHH', 'XHR', 'DRH',
+        'CLDT', 'FCPT', 'GTY', 'JBGS', 'KRC', 'CUZ', 'DEI', 'HIW', 'SLG', 'BXP',
+        'PGRE', 'PDM', 'CLI', 'VNO', 'ESRT', 'NYC', 'SVC', 'ALEX', 'BDN', 'CIO',
+        'GOOD', 'RMAX', 'OPI', 'SRC', 'AAT', 'ADC', 'AKR', 'BFS', 'BRX', 'CDR',
+        'CTRE', 'ELME', 'EPRT', 'LAND', 'LXP', 'NNN', 'NTST', 'OUT', 'ROIC', 'RPT',
+        'SITC', 'UE', 'UMH', 'VRE', 'WPC',
+
+        # Small-Cap Utilities (50 stocks)
+        'AVA', 'AGR', 'ALE', 'AQN', 'ARTNA', 'BKH', 'CPK', 'CWEN', 'CWEN.A', 'NWE',
+        'NWN', 'MDU', 'MGE', 'MSEX', 'OTTR', 'PNM', 'POR', 'SJW', 'SR', 'SWX',
+        'UTL', 'YORW', 'BIP', 'NEP', 'AY', 'AWR', 'CDZI', 'CWCO', 'ELPC', 'GNE',
+        'NOVA', 'NWE', 'NWN', 'OTTR', 'PNM', 'POR', 'SJW', 'SR', 'SWX', 'UTL',
+        'UGI', 'NFE', 'CWEN', 'TAC', 'DUK', 'FTS', 'BEPC', 'AEP', 'CEG', 'VST',
+
+        # Small-Cap Communication & Media (50 stocks)
+        'SSTK', 'TGNA', 'LEE', 'NXST', 'GTN', 'SCHL', 'MSGS', 'FUBO', 'SATS', 'EVER',
+        'GOGO', 'IRDM', 'GILT', 'VSAT', 'IRDM', 'CMCSA', 'CHTR', 'CABO', 'LBRDA', 'LBRDK',
+        'LILA', 'LILAK', 'SIRI', 'LSXMA', 'LSXMB', 'LSXMK', 'GSAT', 'ASTS', 'SPCE', 'RKLB',
+        'MAXN', 'PUBM', 'MGNI', 'TTD', 'APPS', 'BIGC', 'CRTO', 'NCMI', 'IMAX', 'CNK',
+        'RGC', 'MSGN', 'WMG', 'SPOT', 'BMBL', 'MTCH', 'IAC', 'ANGI', 'CARS', 'CVNA',
+
+        # Micro-Cap & Emerging Stocks (200 stocks)
+        'AEHR', 'CLOV', 'GTLB', 'IOT', 'LUNR', 'PL', 'PTON', 'BROS', 'GRND', 'GPRO',
+        'BYND', 'OUST', 'LAZR', 'LIDR', 'INVZ', 'MVIS', 'VLDR', 'AEYE', 'OLED', 'KOPN',
+        'VUZI', 'WIMI', 'HIMX', 'GRMN', 'WOLF', 'SEDG', 'ENPH', 'RUN', 'ARRY', 'CSIQ',
+        'DQ', 'FSLR', 'JKS', 'MAXN', 'NOVA', 'SOL', 'SPWR', 'SHLS', 'VVPR', 'AMPS',
+        'BE', 'CLNE', 'FCEL', 'GEVO', 'AMTX', 'BLDP', 'PLUG', 'HYSR', 'AMRC', 'FLNC',
+        'QS', 'SES', 'ABML', 'CBAT', 'POLA', 'EOSE', 'FREYR', 'ENVX', 'PCVX', 'STEM',
+        'BLNK', 'CHPT', 'EVGo', 'DCFC', 'VLTA', 'WBX', 'ALPP', 'AYRO', 'NWTN', 'SOLO',
+        'LEV', 'GOEV', 'ARVL', 'FSR', 'RIDE', 'WKHS', 'GEV', 'ACTC', 'NGAC', 'CCIV',
+        'PSNY', 'REE', 'INDI', 'ELMS', 'HYZN', 'PTRA', 'MPAA', 'EMBK', 'XL', 'PROTERRA',
+        'BIRD', 'HIMS', 'BROS', 'CANO', 'DNA', 'NTLA', 'BEAM', 'CRSP', 'EDIT', 'VERV',
+        'MASS', 'VCYT', 'FATE', 'BLUE', 'QURE', 'SGMO', 'CRIS', 'VKTX', 'VERU', 'NRIX',
+        'ALLO', 'ABUS', 'ADAP', 'ADMA', 'ADPT', 'ADTX', 'ADVM', 'AGLE', 'AGRX', 'AIMD',
+        'AKBA', 'AKRO', 'ALDX', 'ALEC', 'ALIM', 'ALLO', 'ALNY', 'ALVR', 'AMED', 'AMGN',
+        'AMPH', 'ANGO', 'ANIP', 'ANPC', 'ANTE', 'APDN', 'APTO', 'APYX', 'ARDX', 'ARDS',
+        'ARQT', 'ARWR', 'ASLN', 'ASND', 'ASRT', 'ASXC', 'ATNF', 'ATOS', 'ATRA', 'ATNM',
+        'AVDL', 'AVEO', 'AVGR', 'AVIR', 'AVRO', 'AVXL', 'AXGN', 'AXLA', 'AXNX', 'AXSM',
+        'AYTU', 'BCAB', 'BCDA', 'BCEL', 'BCLI', 'BCRX', 'BDSX', 'BDTX', 'BEAT', 'BFRI',
+        'BHTG', 'BIOL', 'BIOX', 'BLRX', 'BMEA', 'BMRA', 'BNGO', 'BOLD', 'BPTH', 'BRTX',
+        'BSGM', 'BSQR', 'BTAI', 'BVXV', 'BYSI', 'BZUN', 'CAPR', 'CARA', 'CARV', 'CATB',
+        'CBAY', 'CBIO', 'CBRX', 'CCCC', 'CCXI', 'CDAK', 'CDMO', 'CDNA', 'CDTX', 'CDXC',
+        'CDXS', 'CEMI', 'CENT', 'CERE', 'CERS', 'CGEN', 'CGEM', 'CHEK', 'CHMA', 'CHRS'
     ]
 
 def calculate_var(returns, confidence=0.95, method='historical'):
