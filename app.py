@@ -334,7 +334,97 @@ def get_sp500_tickers():
         'BHTG', 'BIOL', 'BIOX', 'BLRX', 'BMEA', 'BMRA', 'BNGO', 'BOLD', 'BPTH', 'BRTX',
         'BSGM', 'BSQR', 'BTAI', 'BVXV', 'BYSI', 'BZUN', 'CAPR', 'CARA', 'CARV', 'CATB',
         'CBAY', 'CBIO', 'CBRX', 'CCCC', 'CCXI', 'CDAK', 'CDMO', 'CDNA', 'CDTX', 'CDXC',
-        'CDXS', 'CEMI', 'CENT', 'CERE', 'CERS', 'CGEN', 'CGEM', 'CHEK', 'CHMA', 'CHRS'
+        'CDXS', 'CEMI', 'CENT', 'CERE', 'CERS', 'CGEN', 'CGEM', 'CHEK', 'CHMA', 'CHRS',
+
+        # Additional Russell 2000 - Small-Cap Tech (100 stocks)
+        'AAOI', 'AAON', 'ABCL', 'ABEO', 'ACIA', 'ACMR', 'ACRS', 'ADTN', 'ADUS', 'AEIS',
+        'AEYE', 'AFRM', 'AIRC', 'AKAM', 'ALKT', 'ALRM', 'ALTR', 'AMBA', 'AMED', 'AMKR',
+        'AMSC', 'AMWD', 'ANGI', 'ANNX', 'AOSL', 'APPF', 'ARAY', 'ARCE', 'ARCT', 'ARLO',
+        'ARVL', 'ASYS', 'ATEC', 'ATEX', 'ATOM', 'ATTO', 'AUDC', 'AVAV', 'AVNW', 'AXTI',
+        'AZTA', 'BBAI', 'BBCP', 'BCOR', 'BCOV', 'BELFB', 'BGNE', 'BILL', 'BKKT', 'BLBD',
+        'BLFS', 'BLNK', 'BMBL', 'BNFT', 'BNSO', 'BPMC', 'BPOP', 'BRID', 'BRKR', 'BRKS',
+        'BTBT', 'BTCT', 'BWMX', 'BYFC', 'CALX', 'CAMP', 'CAMT', 'CARB', 'CART', 'CASS',
+        'CCRN', 'CCSI', 'CDLX', 'CDNS', 'CDZI', 'CEVA', 'CGNT', 'CHRS', 'CIEN', 'CIFR',
+        'CIGI', 'CGNX', 'CLBT', 'CLFD', 'CLIR', 'CLOU', 'CLPT', 'CLRO', 'CLVT', 'CLWT',
+        'CMCT', 'CMPR', 'CNCE', 'CNMD', 'CNOB', 'CNSL', 'CNST', 'CNXC', 'CNXN', 'COGT',
+
+        # Additional Russell 2000 - Small-Cap Healthcare (100 stocks)
+        'CLDX', 'CMPS', 'CNTA', 'COCP', 'COHN', 'COHR', 'COLB', 'COLL', 'CORT', 'COYA',
+        'CPRX', 'CRBP', 'CRDF', 'CRNX', 'CRSP', 'CRTX', 'CRVS', 'CRWS', 'CSTL', 'CTHR',
+        'CTMX', 'CTIC', 'CTSO', 'CTRN', 'CTXR', 'CUTR', 'CVAC', 'CVCO', 'CVGW', 'CVIG',
+        'CVLT', 'CVRX', 'CWST', 'CXDO', 'CYCN', 'CYRX', 'CYTK', 'CZNC', 'DADA', 'DAIO',
+        'DAWN', 'DBRG', 'DCGO', 'DCOM', 'DENN', 'DERM', 'DFIN', 'DGII', 'DGLY', 'DIOD',
+        'DJCO', 'DLHC', 'DMAC', 'DMRC', 'DNLI', 'DOGZ', 'DOMO', 'DORM', 'Doug', 'DRCT',
+        'DRMA', 'DRRX', 'DSGX', 'DSWL', 'DTIL', 'DXPE', 'DXYN', 'DYAI', 'DYNC', 'EAGL',
+        'EARN', 'EARS', 'EAST', 'EBIX', 'EBON', 'ECHO', 'ECOR', 'ECPG', 'EDAP', 'EDBL',
+        'EDIT', 'EDRY', 'EDSA', 'EDUC', 'EEFT', 'EFOI', 'EFSC', 'EGAN', 'EGBN', 'EGLE',
+        'EGRX', 'EH', 'EHTH', 'EIGR', 'EKSO', 'ELDN', 'ELIO', 'ELMD', 'ELSE', 'ELTK',
+
+        # Additional Russell 2000 - Small-Cap Financials (75 stocks)
+        'EMBC', 'EMCF', 'EME', 'EMKR', 'EML', 'EMMA', 'EMMS', 'EMP', 'ENCP', 'ENFN',
+        'ENG', 'ENIA', 'ENJY', 'ENLV', 'ENOB', 'ENOV', 'ENR', 'ENSC', 'ENTA', 'ENTG',
+        'ENVA', 'ENVB', 'ENVI', 'ENVX', 'ENZC', 'EOLS', 'EOSE', 'EPAC', 'EPAM', 'EPAY',
+        'EPIX', 'EPRT', 'EQBK', 'EQIX', 'EQOS', 'EQRX', 'ERAS', 'ERES', 'ERIC', 'ERIE',
+        'ERII', 'ERIEY', 'EROS', 'ESBK', 'ESCA', 'ESEA', 'ESGR', 'ESGRP', 'ESGV', 'ESLT',
+        'ESMT', 'ESNT', 'ESOA', 'ESPN', 'ESPR', 'ESQ', 'ESSA', 'ESSC', 'ESTA', 'ESTC',
+        'ESTY', 'ESXB', 'ETAO', 'ETD', 'ETNB', 'ETON', 'ETSY', 'ETTX', 'EUDA', 'EURN',
+        'EUSA', 'EVCM', 'EVGN', 'EVGO', 'EVGR', 'EVLO', 'EVLV', 'EVOK', 'EVRG', 'EVRI',
+
+        # Additional Russell 2000 - Small-Cap Consumer (75 stocks)
+        'EVTV', 'EVTC', 'EWTX', 'EWZS', 'EXAS', 'EXEL', 'EXFY', 'EXLS', 'EXOD', 'EXPD',
+        'EXPE', 'EXPI', 'EXPO', 'EXTR', 'EYE', 'EYEN', 'EYEG', 'EYES', 'EYESW', 'EYPT',
+        'EZFL', 'EZGO', 'EZPW', 'FAAR', 'FAAS', 'FAF', 'FALC', 'FAMI', 'FANG', 'FANH',
+        'FARM', 'FARO', 'FAST', 'FATBB', 'FATE', 'FATP', 'FBNC', 'FBIZ', 'FBLG', 'FBMS',
+        'FBNK', 'FBRT', 'FBRX', 'FCAP', 'FCBC', 'FCBP', 'FCCO', 'FCCY', 'FCEL', 'FCFS',
+        'FCNCA', 'FCPT', 'FDBC', 'FDMT', 'FDUS', 'FEIM', 'FELE', 'FELP', 'FENC', 'FEND',
+        'FENG', 'FERG', 'FEXD', 'FFBC', 'FFBW', 'FFG', 'FFIC', 'FFIE', 'FFIN', 'FFIV',
+        'FFNW', 'FFWM', 'FGBI', 'FGBIP', 'FGEN', 'FGF', 'FGFPP', 'FGI', 'FGIWW', 'FGMC',
+
+        # Additional Russell 2000 - Small-Cap Industrials (75 stocks)
+        'FHB', 'FHI', 'FHLT', 'FIAC', 'FIBK', 'FICO', 'FINV', 'FINW', 'FISI', 'FITB',
+        'FITBI', 'FITBO', 'FITBP', 'FIVN', 'FIXD', 'FIXX', 'FIZZ', 'FKWL', 'FLAG', 'FLDM',
+        'FLEX', 'FLFV', 'FLIC', 'FLKS', 'FLLC', 'FLLCU', 'FLME', 'FLMN', 'FLMNW', 'FLNG',
+        'FLNT', 'FLUX', 'FLWS', 'FLXN', 'FLXS', 'FLYW', 'FMAO', 'FMBH', 'FMBI', 'FMC',
+        'FMIV', 'FMNB', 'FN', 'FNA', 'FNCB', 'FNCH', 'FNHC', 'FNJN', 'FNKO', 'FNLC',
+        'FNRN', 'FNVT', 'FNWB', 'FNWD', 'FOCS', 'FOE', 'FOLD', 'FOMX', 'FONE', 'FOR',
+        'FORD', 'FORM', 'FORR', 'FORTY', 'FOSL', 'FOX', 'FOXA', 'FOXF', 'FOXW', 'FPAC',
+        'FPAY', 'FPAYU', 'FPAYW', 'FPF', 'FPH', 'FPI', 'FRAF', 'FRBA', 'FRBK', 'FREE',
+
+        # Additional Russell 2000 - Small-Cap Energy & Materials (65 stocks)
+        'FREQ', 'FRES', 'FRGE', 'FRGAP', 'FRGT', 'FRHC', 'FRLA', 'FRLAU', 'FRLAW', 'FRM',
+        'FRME', 'FRMEP', 'FRO', 'FRPH', 'FRPT', 'FRSX', 'FRZA', 'FSBC', 'FSBW', 'FSCO',
+        'FSD', 'FSEA', 'FSFG', 'FSK', 'FSLR', 'FSLY', 'FSM', 'FSNB', 'FSP', 'FSR',
+        'FSS', 'FSTR', 'FSV', 'FTAA', 'FTAAU', 'FTAAW', 'FTAI', 'FTCH', 'FTCI', 'FTCV',
+        'FTCVU', 'FTCVW', 'FTDR', 'FTEK', 'FTF', 'FTFT', 'FTHM', 'FTHY', 'FTI', 'FTK',
+        'FTLF', 'FTNT', 'FTRE', 'FTRP', 'FTSH', 'FTV', 'FUBO', 'FUEL', 'FUL', 'FULC',
+        'FULT', 'FULTP', 'FUN', 'FUNC', 'FUND', 'FURY', 'FUSB', 'FUTU', 'FVCB', 'FVE',
+
+        # Additional Russell 2000 - Micro-Cap Diversified (125 stocks)
+        'FWAC', 'FWBI', 'FWONA', 'FWONK', 'FWRD', 'FXCO', 'FXLV', 'FXNC', 'FYLD', 'GABC',
+        'GAIA', 'GAIN', 'GAINL', 'GAINM', 'GAINN', 'GAINO', 'GALT', 'GAM', 'GAMB', 'GAMC',
+        'GAME', 'GAN', 'GANX', 'GASS', 'GATE', 'GATEU', 'GATEW', 'GBAB', 'GBCI', 'GBDC',
+        'GBIO', 'GBLI', 'GBLIL', 'GBLIZ', 'GBNK', 'GBNY', 'GBRGR', 'GBRGU', 'GBRGW', 'GBS',
+        'GBT', 'GCBC', 'GCMG', 'GCMGW', 'GCO', 'GCOR', 'GCP', 'GCT', 'GCTK', 'GCV',
+        'GDEV', 'GDEVW', 'GDHG', 'GDNR', 'GDNRW', 'GDO', 'GDOC', 'GDOT', 'GDRX', 'GDS',
+        'GDST', 'GDTC', 'GDYN', 'GDYNW', 'GECC', 'GECCM', 'GECCN', 'GECCO', 'GEF', 'GEFA',
+        'GEG', 'GEHC', 'GEL', 'GEN', 'GENC', 'GENE', 'GENI', 'GENK', 'GEOS', 'GERN',
+        'GES', 'GESCO', 'GETD', 'GETY', 'GEVO', 'GFAI', 'GFF', 'GFGD', 'GFGF', 'GFI',
+        'GFL', 'GFOR', 'GFVD', 'GFX', 'GGAA', 'GGAAU', 'GGAAW', 'GGAL', 'GGE', 'GGMC',
+        'GGMCU', 'GGMCW', 'GGN', 'GGOOW', 'GGR', 'GGROW', 'GGZ', 'GH', 'GHC', 'GHIX',
+        'GHIXU', 'GHIXW', 'GHL', 'GHLD', 'GHRS', 'GHSI', 'GIAC', 'GIACU', 'GIACW', 'GIB',
+        'GIFI', 'GIFT', 'GIII', 'GIIX', 'GIIXU', 'GIIXW', 'GIL',
+
+        # Final Russell 2000 Additions - Mixed Sectors (100 stocks)
+        'GILD', 'GILT', 'GILTI', 'GIS', 'GKOS', 'GL', 'GLAD', 'GLADD', 'GLBE', 'GLBS',
+        'GLBZ', 'GLDD', 'GLDI', 'GLG', 'GLHA', 'GLHAU', 'GLHAW', 'GLMD', 'GLNG', 'GLOP',
+        'GLOV', 'GLP', 'GLPG', 'GLPI', 'GLRE', 'GLSI', 'GLST', 'GLT', 'GLTO', 'GLUE',
+        'GLXG', 'GLYC', 'GM', 'GMAB', 'GMBL', 'GMBLW', 'GMDA', 'GME', 'GMED', 'GMGI',
+        'GMLP', 'GMLPP', 'GMRE', 'GMS', 'GMTX', 'GNCA', 'GNFT', 'GNK', 'GNL', 'GNLX',
+        'GNMA', 'GNPX', 'GNRC', 'GNSS', 'GNTA', 'GNTX', 'GNTY', 'GNUS', 'GO', 'GOCCU',
+        'GOCCW', 'GODN', 'GOEV', 'GOEVW', 'GOF', 'GOGL', 'GOGO', 'GOL', 'GOLD', 'GOLF',
+        'GOOS', 'GORO', 'GORV', 'GOSS', 'GOTU', 'GOVX', 'GOVXW', 'GP', 'GPAC', 'GPACU',
+        'GPACW', 'GPC', 'GPI', 'GPJA', 'GPK', 'GPL', 'GPMT', 'GPN', 'GPOR', 'GPRE',
+        'GPRK', 'GPRO', 'GPS', 'GPTX', 'GPX', 'GRAB', 'GRABW', 'GRAL', 'GRBK', 'GRC'
     ]
 
 def calculate_var(returns, confidence=0.95, method='historical'):
