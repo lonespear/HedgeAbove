@@ -194,18 +194,42 @@ def calculate_portfolio_metrics(returns):
 def fit_arima_model(data, auto=True, order=(1,1,1)):
     """Fit ARIMA model with auto parameter selection"""
     try:
-        from pmdarima import auto_arima
         from statsmodels.tsa.arima.model import ARIMA
 
         if auto:
-            # Auto ARIMA with seasonal=False for speed
-            model = auto_arima(data, seasonal=False, stepwise=True,
-                             suppress_warnings=True, error_action='ignore',
-                             max_p=5, max_d=2, max_q=5, trace=False)
-            fitted_model = model
-            best_order = model.order
-            aic = model.aic()
-            bic = model.bic()
+            # Try pmdarima if available, otherwise use simple grid search
+            try:
+                from pmdarima import auto_arima
+                # Auto ARIMA with seasonal=False for speed
+                model = auto_arima(data, seasonal=False, stepwise=True,
+                                 suppress_warnings=True, error_action='ignore',
+                                 max_p=5, max_d=2, max_q=5, trace=False)
+                fitted_model = model
+                best_order = model.order
+                aic = model.aic()
+                bic = model.bic()
+            except ImportError:
+                # Fallback: simple grid search with statsmodels
+                best_aic = np.inf
+                best_order = (1, 1, 1)
+                best_model = None
+
+                for p in range(0, 3):
+                    for d in range(0, 2):
+                        for q in range(0, 3):
+                            try:
+                                temp_model = ARIMA(data, order=(p, d, q))
+                                temp_fit = temp_model.fit()
+                                if temp_fit.aic < best_aic:
+                                    best_aic = temp_fit.aic
+                                    best_order = (p, d, q)
+                                    best_model = temp_fit
+                            except:
+                                continue
+
+                fitted_model = best_model
+                aic = best_model.aic
+                bic = best_model.bic
         else:
             # Manual ARIMA with specified order
             model = ARIMA(data, order=order)
@@ -219,7 +243,7 @@ def fit_arima_model(data, auto=True, order=(1,1,1)):
             'order': best_order,
             'aic': aic,
             'bic': bic,
-            'residuals': fitted_model.resid()
+            'residuals': fitted_model.resid
         }
     except Exception as e:
         st.error(f"ARIMA fitting error: {str(e)}")
@@ -228,15 +252,22 @@ def fit_arima_model(data, auto=True, order=(1,1,1)):
 def forecast_arima(fitted_model, steps=30, alpha=0.05):
     """Generate ARIMA forecasts with confidence intervals"""
     try:
-        # Get forecasts
-        forecast = fitted_model.predict(n_periods=steps, return_conf_int=True, alpha=alpha)
-
-        if isinstance(forecast, tuple):
-            predictions = forecast[0]
-            conf_int = forecast[1]
+        # Check if it's a pmdarima model or statsmodels model
+        if hasattr(fitted_model, 'predict') and hasattr(fitted_model, 'n_periods'):
+            # pmdarima model
+            forecast = fitted_model.predict(n_periods=steps, return_conf_int=True, alpha=alpha)
+            if isinstance(forecast, tuple):
+                predictions = forecast[0]
+                conf_int = forecast[1]
+            else:
+                predictions = forecast
+                conf_int = None
         else:
-            predictions = forecast
-            conf_int = None
+            # statsmodels ARIMA model
+            forecast_result = fitted_model.get_forecast(steps=steps)
+            predictions = forecast_result.predicted_mean
+            conf_int_df = forecast_result.conf_int(alpha=alpha)
+            conf_int = conf_int_df.values if conf_int_df is not None else None
 
         return {
             'forecast': predictions,

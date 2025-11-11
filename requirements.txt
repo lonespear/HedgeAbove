@@ -26,7 +26,7 @@ statsmodels>=0.14.0
 
 # Time Series & Volatility Models
 arch>=6.0.0  # For ARCH/GARCH models
-pmdarima>=2.0.0  # For auto-ARIMA model selection
+# pmdarima>=2.0.0  # Optional: For enhanced auto-ARIMA (has build issues on Python 3.13+, fallback to statsmodels grid search)
 
 # Copula Analysis
 copulas>=0.9.0  # For multivariate dependence modeling
