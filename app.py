@@ -107,14 +107,52 @@ def get_stock_info(symbol):
 
 @st.cache_data(ttl=3600)
 def get_sp500_tickers():
-    """Get S&P 500 constituents"""
-    # Using a simplified list for demo - in production, fetch from Wikipedia or other source
+    """Get expanded S&P 500 constituents with better sector coverage"""
     return [
-        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'UNH', 'JNJ',
-        'JPM', 'V', 'PG', 'XOM', 'HD', 'CVX', 'MA', 'ABBV', 'PFE', 'AVGO',
-        'COST', 'DIS', 'ADBE', 'NFLX', 'CRM', 'ACN', 'NKE', 'TMO', 'MRK', 'LLY',
-        'CSCO', 'PEP', 'ABT', 'WMT', 'DHR', 'TXN', 'INTC', 'VZ', 'ORCL', 'PM',
-        'QCOM', 'AMD', 'CMCSA', 'UNP', 'NEE', 'HON', 'COP', 'RTX', 'IBM', 'SBUX'
+        # Technology (FAANG + Major Tech)
+        'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'META', 'NVDA', 'TSLA', 'AVGO', 'ORCL',
+        'ADBE', 'NFLX', 'CRM', 'CSCO', 'INTC', 'AMD', 'TXN', 'QCOM', 'IBM', 'NOW',
+        'INTU', 'AMAT', 'MU', 'ADI', 'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MCHP', 'FTNT',
+
+        # Healthcare - Pharma & Biotech
+        'JNJ', 'UNH', 'LLY', 'ABBV', 'MRK', 'PFE', 'TMO', 'ABT', 'DHR', 'BMY',
+        'AMGN', 'GILD', 'CVS', 'CI', 'ELV', 'REGN', 'VRTX', 'HUM', 'ISRG', 'ZTS',
+        'BIIB', 'MRNA', 'ILMN', 'IQV', 'BSX', 'MDT', 'SYK', 'EW', 'IDXX', 'HCA',
+
+        # Financials
+        'JPM', 'BAC', 'WFC', 'MS', 'GS', 'BLK', 'C', 'SCHW', 'AXP', 'SPGI',
+        'CB', 'MMC', 'PGR', 'TFC', 'USB', 'PNC', 'COF', 'BK', 'AIG', 'MET',
+
+        # Consumer Discretionary
+        'AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX', 'BKNG',
+        'MAR', 'GM', 'F', 'ABNB', 'CMG', 'YUM', 'DRI', 'ROST', 'DG', 'ULTA',
+
+        # Consumer Staples
+        'WMT', 'PG', 'COST', 'KO', 'PEP', 'PM', 'MO', 'CL', 'MDLZ', 'KMB',
+        'GIS', 'KHC', 'TSN', 'HSY', 'K', 'CLX', 'SJM', 'CPB',
+
+        # Energy
+        'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+        'WMB', 'KMI', 'BKR', 'HES', 'DVN', 'FANG', 'MRO', 'APA',
+
+        # Industrials
+        'UNP', 'HON', 'RTX', 'UPS', 'CAT', 'DE', 'BA', 'LMT', 'GE', 'MMM',
+        'FDX', 'NSC', 'EMR', 'ETN', 'ITW', 'PH', 'WM', 'CSX', 'NOC', 'GD',
+
+        # Communication Services
+        'META', 'GOOGL', 'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'EA', 'TTWO',
+
+        # Utilities
+        'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'SRE', 'XEL', 'ES', 'ED',
+
+        # Real Estate
+        'PLD', 'AMT', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'WELL', 'DLR', 'AVB',
+
+        # Materials
+        'LIN', 'APD', 'ECL', 'SHW', 'FCX', 'NEM', 'DOW', 'DD', 'NUE', 'VMC',
+
+        # Payment/Fintech
+        'V', 'MA', 'PYPL', 'ADP', 'FIS', 'FISV', 'GPN'
     ]
 
 def calculate_var(returns, confidence=0.95, method='historical'):
@@ -230,7 +268,7 @@ st.markdown('<div class="sub-header">Rise Above Market Uncertainty</div>', unsaf
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Portfolio Builder", "Risk Analytics", "Portfolio Optimization", "Stock Screener", "AI Predictions"]
+    ["Home", "Stock Screener", "Portfolio Builder", "Risk Analytics", "Portfolio Optimization", "AI Predictions"]
 )
 
 # Sidebar user info
@@ -305,7 +343,134 @@ if page == "Home":
                     st.write(item)
 
     st.markdown("---")
-    st.success("💡 **Get Started:** Select 'Portfolio Builder' from the sidebar to create your portfolio!")
+    st.success("💡 **Get Started:** Select 'Stock Screener' to find stocks, then build your portfolio!")
+
+#==================== STOCK SCREENER ====================
+
+elif page == "Stock Screener":
+    st.header("🔍 Stock Screener")
+
+    st.subheader("S&P 500 Universe (~200+ stocks)")
+
+    # Filters
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        sector_filter = st.multiselect(
+            "Sector",
+            ["Technology", "Healthcare", "Financials", "Consumer Discretionary", "Consumer Staples",
+             "Energy", "Industrials", "Communication Services", "Utilities", "Real Estate",
+             "Materials", "All"],
+            default=["All"]
+        )
+
+    with col2:
+        cap_filter = st.multiselect(
+            "Market Cap",
+            ["Mega Cap (>$200B)", "Large Cap ($10B-$200B)", "Mid Cap ($2B-$10B)", "All"],
+            default=["All"]
+        )
+
+    with col3:
+        results_limit = st.slider("Max Results to Display", 10, 100, 30, step=10)
+
+    # Get tickers
+    all_tickers = get_sp500_tickers()
+
+    # Apply sector filter (will use real sector data from yfinance)
+    st.markdown("---")
+
+    if len(all_tickers) > 0:
+        # Fetch data for tickers
+        with st.spinner(f"Fetching data for up to {results_limit} stocks..."):
+            screener_data = []
+            for ticker in all_tickers[:results_limit]:  # Limit API calls
+                stock_info = get_stock_info(ticker)
+                if stock_info:
+                    # Apply filters
+                    if "All" not in sector_filter:
+                        if stock_info['sector'] not in sector_filter:
+                            continue
+
+                    screener_data.append({
+                        'Symbol': ticker,
+                        'Company': stock_info['name'],
+                        'Sector': stock_info['sector'],
+                        'Price': stock_info['current_price'],
+                        'Market Cap': stock_info['market_cap'],
+                        'P/E': stock_info['pe_ratio'] if stock_info['pe_ratio'] else None,
+                        'Div Yield %': stock_info['dividend_yield'] * 100 if stock_info['dividend_yield'] else 0
+                    })
+
+        if screener_data:
+            screener_df = pd.DataFrame(screener_data)
+
+            # Display count by sector
+            st.subheader(f"📊 Found {len(screener_df)} stocks")
+
+            sector_counts = screener_df['Sector'].value_counts()
+            col1, col2 = st.columns([2, 1])
+
+            with col1:
+                # Main screener table
+                st.dataframe(
+                    screener_df.style.format({
+                        'Price': '${:.2f}',
+                        'Market Cap': lambda x: f"${x/1e9:.2f}B" if x > 0 else "N/A",
+                        'P/E': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A",
+                        'Div Yield %': '{:.2f}%'
+                    }),
+                    use_container_width=True,
+                    height=600
+                )
+
+            with col2:
+                st.write("**Sector Distribution:**")
+                for sector, count in sector_counts.items():
+                    st.write(f"• {sector}: {count}")
+
+            # Quick add to portfolio
+            st.markdown("---")
+            st.subheader("➕ Quick Add to Portfolio")
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                quick_symbol = st.selectbox("Select Stock", screener_df['Symbol'].tolist())
+                if quick_symbol:
+                    selected_company = screener_df[screener_df['Symbol'] == quick_symbol]['Company'].iloc[0]
+                    st.caption(f"**{selected_company}**")
+            with col2:
+                quick_shares = st.number_input("Shares", min_value=1.0, value=10.0, step=1.0, key="screener_shares")
+            with col3:
+                quick_price = screener_df[screener_df['Symbol'] == quick_symbol]['Price'].iloc[0] if quick_symbol else 100
+                use_market_price = st.checkbox("Use market price", value=True, key="screener_use_market")
+                if use_market_price:
+                    quick_avg_price = quick_price
+                    st.info(f"${quick_avg_price:.2f}")
+                else:
+                    quick_avg_price = st.number_input("Custom Price", value=float(quick_price), step=0.01, key="screener_custom_price")
+            with col4:
+                st.write("")
+                st.write("")
+                total_cost = quick_shares * quick_avg_price
+                st.metric("Total", f"${total_cost:,.2f}")
+
+            if st.button("➕ Add to Portfolio", type="primary", use_container_width=True, key="screener_add"):
+                if quick_symbol not in st.session_state.portfolio['Symbol'].values:
+                    new_row = pd.DataFrame({
+                        'Symbol': [quick_symbol],
+                        'Shares': [quick_shares],
+                        'Avg Price': [quick_avg_price]
+                    })
+                    st.session_state.portfolio = pd.concat([st.session_state.portfolio, new_row], ignore_index=True)
+                    st.success(f"✅ Added {quick_shares} shares of {quick_symbol} ({selected_company}) at ${quick_avg_price:.2f}")
+                    st.balloons()
+                else:
+                    st.warning(f"❌ {quick_symbol} already in portfolio. Use Portfolio Builder to edit it.")
+        else:
+            st.info("No stocks match your filter criteria. Try adjusting filters or increasing results limit.")
+    else:
+        st.error("Could not load stock list")
 
 #==================== PORTFOLIO BUILDER ====================
 
@@ -849,124 +1014,6 @@ elif page == "Portfolio Optimization":
                     }).background_gradient(subset=['Difference %'], cmap='RdYlGn', vmin=-10, vmax=10),
                     use_container_width=True
                 )
-
-#==================== STOCK SCREENER ====================
-
-elif page == "Stock Screener":
-    st.header("🔍 Stock Screener")
-
-    st.subheader("S&P 500 Screener")
-
-    # Filters
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        sector_filter = st.multiselect(
-            "Sector",
-            ["Technology", "Healthcare", "Financials", "Consumer", "Industrial", "Energy", "All"],
-            default=["All"]
-        )
-
-    with col2:
-        cap_filter = st.multiselect(
-            "Market Cap",
-            ["Large Cap (>$10B)", "Mid Cap ($2B-$10B)", "Small Cap (<$2B)", "All"],
-            default=["All"]
-        )
-
-    with col3:
-        region_filter = st.multiselect(
-            "Region",
-            ["US Domestic", "International", "All"],
-            default=["All"]
-        )
-
-    # Get S&P 500 tickers
-    sp500_tickers = get_sp500_tickers()
-
-    # Sector mapping (simplified for demo)
-    sector_map = {
-        'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'NVDA': 'Technology',
-        'META': 'Technology', 'TSLA': 'Technology', 'ADBE': 'Technology', 'NFLX': 'Technology',
-        'CRM': 'Technology', 'INTC': 'Technology', 'CSCO': 'Technology', 'ORCL': 'Technology',
-        'AMD': 'Technology', 'QCOM': 'Technology', 'TXN': 'Technology', 'AVGO': 'Technology',
-        'IBM': 'Technology', 'AMZN': 'Consumer', 'WMT': 'Consumer', 'HD': 'Consumer',
-        'NKE': 'Consumer', 'SBUX': 'Consumer', 'DIS': 'Consumer', 'COST': 'Consumer',
-        'JPM': 'Financials', 'V': 'Financials', 'MA': 'Financials', 'BRK.B': 'Financials',
-        'JNJ': 'Healthcare', 'UNH': 'Healthcare', 'PFE': 'Healthcare', 'ABBV': 'Healthcare',
-        'TMO': 'Healthcare', 'MRK': 'Healthcare', 'ABT': 'Healthcare', 'LLY': 'Healthcare',
-        'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'NEE': 'Energy',
-        'UNP': 'Industrial', 'HON': 'Industrial', 'RTX': 'Industrial', 'ACN': 'Industrial',
-        'PG': 'Consumer', 'PEP': 'Consumer', 'PM': 'Consumer', 'VZ': 'Technology',
-        'CMCSA': 'Technology', 'DHR': 'Healthcare'
-    }
-
-    # Apply filters (simplified)
-    filtered_tickers = sp500_tickers.copy()
-
-    if "All" not in sector_filter:
-        filtered_tickers = [t for t in filtered_tickers if sector_map.get(t, 'Other') in sector_filter]
-
-    # Display results
-    st.subheader(f"Screener Results ({len(filtered_tickers)} stocks)")
-
-    if len(filtered_tickers) > 0:
-        # Batch fetch prices and company names for filtered tickers
-        with st.spinner(f"Fetching data for {len(filtered_tickers)} stocks..."):
-            screener_data = []
-            for ticker in filtered_tickers[:20]:  # Limit to 20 for demo
-                stock_info = get_stock_info(ticker)
-                if stock_info:
-                    screener_data.append({
-                        'Symbol': ticker,
-                        'Company': stock_info['name'],
-                        'Sector': sector_map.get(ticker, stock_info.get('sector', 'Other')),
-                        'Price': stock_info['current_price'],
-                        'Market Cap': stock_info['market_cap'],
-                        'P/E': stock_info['pe_ratio'] if stock_info['pe_ratio'] else None
-                    })
-
-        if screener_data:
-            screener_df = pd.DataFrame(screener_data)
-
-            # Display with selection
-            st.dataframe(
-                screener_df.style.format({
-                    'Price': '${:.2f}',
-                    'Market Cap': lambda x: f"${x/1e9:.2f}B" if x > 0 else "N/A",
-                    'P/E': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"
-                }),
-                use_container_width=True,
-                height=600
-            )
-
-            # Quick add to portfolio
-            st.subheader("Quick Add to Portfolio")
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                quick_symbol = st.selectbox("Select Stock", screener_df['Symbol'].tolist())
-            with col2:
-                quick_shares = st.number_input("Shares", min_value=1.0, value=10.0, step=1.0)
-            with col3:
-                quick_price = screener_df[screener_df['Symbol'] == quick_symbol]['Price'].iloc[0] if quick_symbol else 100
-                quick_avg_price = st.number_input("Avg Price", value=float(quick_price), step=0.01)
-            with col4:
-                st.write("")
-                st.write("")
-                if st.button("➕ Add to Portfolio", type="primary"):
-                    if quick_symbol not in st.session_state.portfolio['Symbol'].values:
-                        new_row = pd.DataFrame({
-                            'Symbol': [quick_symbol],
-                            'Shares': [quick_shares],
-                            'Avg Price': [quick_avg_price]
-                        })
-                        st.session_state.portfolio = pd.concat([st.session_state.portfolio, new_row], ignore_index=True)
-                        st.success(f"✅ Added {quick_shares} shares of {quick_symbol} to portfolio!")
-                    else:
-                        st.warning(f"{quick_symbol} already in portfolio")
-    else:
-        st.info("No stocks match your filter criteria")
 
 #==================== AI PREDICTIONS (Placeholder) ====================
 
