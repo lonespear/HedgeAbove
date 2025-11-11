@@ -188,6 +188,288 @@ def calculate_portfolio_metrics(returns):
     metrics['Max Drawdown'] = drawdown.min()
     return metrics
 
+#==================== ARIMA FUNCTIONS ====================
+
+@st.cache_data(ttl=3600)
+def fit_arima_model(data, auto=True, order=(1,1,1)):
+    """Fit ARIMA model with auto parameter selection"""
+    try:
+        from pmdarima import auto_arima
+        from statsmodels.tsa.arima.model import ARIMA
+
+        if auto:
+            # Auto ARIMA with seasonal=False for speed
+            model = auto_arima(data, seasonal=False, stepwise=True,
+                             suppress_warnings=True, error_action='ignore',
+                             max_p=5, max_d=2, max_q=5, trace=False)
+            fitted_model = model
+            best_order = model.order
+            aic = model.aic()
+            bic = model.bic()
+        else:
+            # Manual ARIMA with specified order
+            model = ARIMA(data, order=order)
+            fitted_model = model.fit()
+            best_order = order
+            aic = fitted_model.aic
+            bic = fitted_model.bic
+
+        return {
+            'model': fitted_model,
+            'order': best_order,
+            'aic': aic,
+            'bic': bic,
+            'residuals': fitted_model.resid()
+        }
+    except Exception as e:
+        st.error(f"ARIMA fitting error: {str(e)}")
+        return None
+
+def forecast_arima(fitted_model, steps=30, alpha=0.05):
+    """Generate ARIMA forecasts with confidence intervals"""
+    try:
+        # Get forecasts
+        forecast = fitted_model.predict(n_periods=steps, return_conf_int=True, alpha=alpha)
+
+        if isinstance(forecast, tuple):
+            predictions = forecast[0]
+            conf_int = forecast[1]
+        else:
+            predictions = forecast
+            conf_int = None
+
+        return {
+            'forecast': predictions,
+            'conf_int': conf_int,
+            'lower': conf_int[:, 0] if conf_int is not None else None,
+            'upper': conf_int[:, 1] if conf_int is not None else None
+        }
+    except Exception as e:
+        st.error(f"ARIMA forecast error: {str(e)}")
+        return None
+
+def arima_diagnostics(residuals):
+    """Generate ARIMA diagnostic statistics"""
+    try:
+        from statsmodels.stats.diagnostic import acorr_ljungbox
+        from scipy.stats import jarque_bera, normaltest
+
+        # Ljung-Box test for autocorrelation
+        lb_test = acorr_ljungbox(residuals, lags=10, return_df=True)
+
+        # Normality tests
+        jb_stat, jb_pvalue = jarque_bera(residuals)
+
+        # Mean and std of residuals
+        residual_mean = residuals.mean()
+        residual_std = residuals.std()
+
+        return {
+            'ljung_box': lb_test,
+            'jb_statistic': jb_stat,
+            'jb_pvalue': jb_pvalue,
+            'residual_mean': residual_mean,
+            'residual_std': residual_std,
+            'is_normal': jb_pvalue > 0.05
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+#==================== ARCH/GARCH FUNCTIONS ====================
+
+@st.cache_data(ttl=3600)
+def fit_garch_model(returns, p=1, q=1, model_type='GARCH'):
+    """Fit GARCH model to returns data"""
+    try:
+        from arch import arch_model
+
+        # Remove mean from returns (assuming zero mean)
+        returns_pct = returns * 100  # ARCH models work better with percentage returns
+
+        # Fit GARCH model
+        model = arch_model(returns_pct, vol=model_type, p=p, q=q)
+        fitted_model = model.fit(disp='off', show_warning=False)
+
+        return {
+            'model': fitted_model,
+            'params': fitted_model.params,
+            'aic': fitted_model.aic,
+            'bic': fitted_model.bic,
+            'conditional_volatility': fitted_model.conditional_volatility,
+            'residuals': fitted_model.resid
+        }
+    except Exception as e:
+        st.error(f"GARCH fitting error: {str(e)}")
+        return None
+
+def forecast_volatility(fitted_garch, horizon=30):
+    """Forecast volatility using fitted GARCH model"""
+    try:
+        # Generate volatility forecast
+        forecast = fitted_garch.forecast(horizon=horizon)
+
+        # Extract variance forecasts and convert to volatility
+        variance_forecast = forecast.variance.values[-1, :]
+        volatility_forecast = np.sqrt(variance_forecast)
+
+        return {
+            'volatility': volatility_forecast,
+            'variance': variance_forecast,
+            'horizon': horizon
+        }
+    except Exception as e:
+        st.error(f"Volatility forecast error: {str(e)}")
+        return None
+
+def garch_var(returns, fitted_garch, confidence=0.95):
+    """Calculate VaR using GARCH volatility forecast"""
+    try:
+        from scipy.stats import norm
+
+        # Get 1-day ahead volatility forecast
+        forecast = fitted_garch.forecast(horizon=1)
+        volatility = np.sqrt(forecast.variance.values[-1, 0]) / 100  # Convert back from percentage
+
+        # Calculate VaR assuming normal distribution
+        z_score = norm.ppf(1 - confidence)
+        var = z_score * volatility
+
+        return var
+    except Exception as e:
+        return None
+
+def extract_volatility_regimes(conditional_vol, threshold_percentile=75):
+    """Identify high and low volatility regimes"""
+    try:
+        threshold = np.percentile(conditional_vol, threshold_percentile)
+
+        high_vol_periods = conditional_vol > threshold
+        low_vol_periods = conditional_vol <= np.percentile(conditional_vol, 25)
+
+        return {
+            'threshold': threshold,
+            'high_vol_periods': high_vol_periods,
+            'low_vol_periods': low_vol_periods,
+            'high_vol_mean': conditional_vol[high_vol_periods].mean(),
+            'low_vol_mean': conditional_vol[low_vol_periods].mean()
+        }
+    except Exception as e:
+        return None
+
+#==================== COPULA FUNCTIONS ====================
+
+def fit_copula(returns1, returns2, copula_type='gaussian'):
+    """Fit copula to bivariate returns data"""
+    try:
+        from copulas.bivariate import Gaussian, Clayton, Gumbel, Frank
+        from scipy.stats import t as student_t
+
+        # Convert to uniform marginals using empirical CDF
+        from scipy.stats import rankdata
+        n = len(returns1)
+        u1 = rankdata(returns1) / (n + 1)
+        u2 = rankdata(returns2) / (n + 1)
+
+        # Create dataframe for copulas library
+        data = pd.DataFrame({'u1': u1, 'u2': u2})
+
+        # Fit copula based on type
+        if copula_type.lower() == 'gaussian':
+            copula = Gaussian()
+        elif copula_type.lower() == 'clayton':
+            copula = Clayton()
+        elif copula_type.lower() == 'gumbel':
+            copula = Gumbel()
+        elif copula_type.lower() == 'frank':
+            copula = Frank()
+        else:
+            copula = Gaussian()
+
+        copula.fit(data)
+
+        return {
+            'copula': copula,
+            'type': copula_type,
+            'u1': u1,
+            'u2': u2,
+            'params': copula.to_dict()
+        }
+    except Exception as e:
+        st.error(f"Copula fitting error: {str(e)}")
+        return None
+
+def calculate_tail_dependence(returns1, returns2, copula_type='gaussian'):
+    """Calculate upper and lower tail dependence coefficients"""
+    try:
+        from scipy.stats import spearmanr, kendalltau
+
+        # Spearman's rho and Kendall's tau
+        rho, _ = spearmanr(returns1, returns2)
+        tau, _ = kendalltau(returns1, returns2)
+
+        # Theoretical tail dependence for common copulas
+        if copula_type.lower() == 'gaussian':
+            upper_tail = 0  # Gaussian has no tail dependence
+            lower_tail = 0
+        elif copula_type.lower() == 't':
+            # For t-copula, both tails have dependence (symmetric)
+            # This is a simplified approximation
+            upper_tail = tau  # Placeholder
+            lower_tail = tau
+        elif copula_type.lower() == 'clayton':
+            # Clayton has lower tail dependence
+            theta = 2 * tau / (1 - tau) if tau < 1 else 1
+            lower_tail = 2 ** (-1/theta) if theta > 0 else 0
+            upper_tail = 0
+        elif copula_type.lower() == 'gumbel':
+            # Gumbel has upper tail dependence
+            theta = 1 / (1 - tau) if tau < 1 else 1
+            upper_tail = 2 - 2 ** (1/theta)
+            lower_tail = 0
+        else:
+            upper_tail = 0
+            lower_tail = 0
+
+        return {
+            'spearman_rho': rho,
+            'kendall_tau': tau,
+            'upper_tail': upper_tail,
+            'lower_tail': lower_tail
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+def copula_var(portfolio_returns, returns_matrix, copula_type='gaussian', confidence=0.95, simulations=10000):
+    """Calculate portfolio VaR using copula simulation"""
+    try:
+        from copulas.multivariate import GaussianMultivariate
+
+        # Fit multivariate copula
+        copula = GaussianMultivariate()
+        copula.fit(returns_matrix)
+
+        # Generate scenarios
+        samples = copula.sample(simulations)
+
+        # Calculate portfolio returns for each scenario
+        weights = np.ones(returns_matrix.shape[1]) / returns_matrix.shape[1]  # Equal weights
+        simulated_returns = (samples * weights).sum(axis=1)
+
+        # Calculate VaR
+        var = np.percentile(simulated_returns, (1 - confidence) * 100)
+
+        return var
+    except Exception as e:
+        return None
+
+def simulate_copula(copula, n_samples=1000):
+    """Generate samples from fitted copula"""
+    try:
+        samples = copula.sample(n_samples)
+        return samples
+    except Exception as e:
+        return None
+
 def optimize_portfolio(returns, method='max_sharpe', target_return=None):
     """Portfolio optimization using Modern Portfolio Theory"""
     n_assets = returns.shape[1]
@@ -786,6 +1068,168 @@ elif page == "Risk Analytics":
             )
             st.plotly_chart(fig, use_container_width=True)
 
+            # Copula Analysis
+            st.subheader("📊 Tail Dependence & Copula Analysis")
+
+            if len(symbols) >= 2:
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    asset1 = st.selectbox("Asset 1", symbols, key='copula_asset1')
+                with col2:
+                    asset2 = st.selectbox("Asset 2", [s for s in symbols if s != asset1], key='copula_asset2')
+
+                copula_type = st.selectbox(
+                    "Copula Type",
+                    ["Gaussian", "t-Copula", "Clayton", "Gumbel"],
+                    help="Select copula family for dependence modeling"
+                )
+
+                if st.button("Analyze Tail Dependence"):
+                    with st.spinner("Fitting copula model..."):
+                        returns1 = returns[asset1].dropna()
+                        returns2 = returns[asset2].dropna()
+
+                        # Align the two return series
+                        common_index = returns1.index.intersection(returns2.index)
+                        returns1 = returns1.loc[common_index]
+                        returns2 = returns2.loc[common_index]
+
+                        # Calculate tail dependence
+                        tail_dep = calculate_tail_dependence(returns1, returns2, copula_type.lower().replace('-', ''))
+
+                        # Display metrics
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Spearman's ρ", f"{tail_dep['spearman_rho']:.3f}")
+                        with col2:
+                            st.metric("Kendall's τ", f"{tail_dep['kendall_tau']:.3f}")
+                        with col3:
+                            st.metric("Upper Tail λU", f"{tail_dep['upper_tail']:.3f}")
+                        with col4:
+                            st.metric("Lower Tail λL", f"{tail_dep['lower_tail']:.3f}")
+
+                        st.info(f"""
+                        **Interpretation:**
+                        - **Spearman's ρ** and **Kendall's τ**: Rank correlations (0 = independent, ±1 = perfect dependence)
+                        - **Upper Tail Dependence (λU)**: Probability of joint extreme positive returns
+                        - **Lower Tail Dependence (λL)**: Probability of joint extreme negative returns (crashes)
+                        - **{copula_type}**: {
+                            'No tail dependence' if copula_type == 'Gaussian' else
+                            'Symmetric tail dependence' if 't' in copula_type else
+                            'Lower tail dependence (crash risk)' if copula_type == 'Clayton' else
+                            'Upper tail dependence (boom risk)'
+                        }
+                        """)
+
+                        # Scatter plot with copula fit
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=returns1,
+                            y=returns2,
+                            mode='markers',
+                            marker=dict(size=5, opacity=0.6, color='blue'),
+                            name='Returns'
+                        ))
+                        fig.update_layout(
+                            title=f"{asset1} vs {asset2} Returns with {copula_type}",
+                            xaxis_title=f"{asset1} Returns",
+                            yaxis_title=f"{asset2} Returns",
+                            hovermode='closest'
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+            else:
+                st.info("Add at least 2 assets to analyze tail dependence")
+
+            st.markdown("---")
+
+            # GARCH Volatility Forecasting
+            st.subheader("🔥 GARCH Volatility Forecasting & Regimes")
+
+            if len(portfolio_returns) > 100:  # Need enough data for GARCH
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    forecast_horizon = st.slider("Forecast Horizon (days)", 5, 60, 30)
+                with col2:
+                    garch_p = st.selectbox("GARCH p (lag)", [1, 2], index=0)
+                    garch_q = st.selectbox("GARCH q (lag)", [1, 2], index=0)
+
+                if st.button("Run GARCH Analysis"):
+                    with st.spinner("Fitting GARCH model..."):
+                        # Fit GARCH model to portfolio returns
+                        garch_result = fit_garch_model(portfolio_returns, p=garch_p, q=garch_q)
+
+                        if garch_result:
+                            # Display model statistics
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("AIC", f"{garch_result['aic']:.2f}")
+                            with col2:
+                                st.metric("BIC", f"{garch_result['bic']:.2f}")
+                            with col3:
+                                current_vol = garch_result['conditional_volatility'].iloc[-1] / 100
+                                st.metric("Current Volatility", f"{current_vol*np.sqrt(252)*100:.2f}%")
+
+                            # Forecast volatility
+                            vol_forecast = forecast_volatility(garch_result['model'], horizon=forecast_horizon)
+
+                            if vol_forecast:
+                                # Plot conditional volatility and forecast
+                                fig = go.Figure()
+
+                                # Historical conditional volatility
+                                fig.add_trace(go.Scatter(
+                                    x=portfolio_returns.index,
+                                    y=garch_result['conditional_volatility'] / 100 * np.sqrt(252) * 100,
+                                    mode='lines',
+                                    name='Conditional Volatility',
+                                    line=dict(color='orange', width=2)
+                                ))
+
+                                # Forecast
+                                forecast_dates = pd.date_range(
+                                    start=portfolio_returns.index[-1],
+                                    periods=forecast_horizon + 1,
+                                    freq='D'
+                                )[1:]
+
+                                fig.add_trace(go.Scatter(
+                                    x=forecast_dates,
+                                    y=vol_forecast['volatility'] * np.sqrt(252),
+                                    mode='lines',
+                                    name='Volatility Forecast',
+                                    line=dict(color='red', width=2, dash='dash')
+                                ))
+
+                                fig.update_layout(
+                                    title=f"GARCH({garch_p},{garch_q}) Volatility: Historical & Forecast",
+                                    xaxis_title="Date",
+                                    yaxis_title="Annualized Volatility (%)",
+                                    hovermode='x unified'
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                # Volatility regimes
+                                regimes = extract_volatility_regimes(garch_result['conditional_volatility'])
+
+                                if regimes:
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.metric("High Vol Regime Avg", f"{regimes['high_vol_mean']/100*np.sqrt(252)*100:.2f}%")
+                                    with col2:
+                                        st.metric("Low Vol Regime Avg", f"{regimes['low_vol_mean']/100*np.sqrt(252)*100:.2f}%")
+
+                                # GARCH-based VaR
+                                garch_var_95 = garch_var(portfolio_returns, garch_result['model'], confidence=0.95)
+                                if garch_var_95:
+                                    st.info(f"**GARCH-Based 1-Day VaR (95%):** {garch_var_95:.4f} ({garch_var_95*100:.2f}%)")
+            else:
+                st.info("Add more portfolio history (>100 days) for GARCH analysis")
+
+            st.markdown("---")
+
             # Rolling Volatility
             st.subheader("Rolling Volatility (30-day)")
 
@@ -1020,22 +1464,413 @@ elif page == "Portfolio Optimization":
                     use_container_width=True
                 )
 
-#==================== AI PREDICTIONS (Placeholder) ====================
+#==================== AI PREDICTIONS ====================
 
 elif page == "AI Predictions":
-    st.header("🤖 AI Price Predictions")
+    st.header("🤖 Time Series Forecasting & Volatility Prediction")
 
-    st.info("⚠️ ML prediction models coming soon! This will include LSTM, Prophet, and ensemble forecasting.")
+    # Model selection tabs
+    tab1, tab2, tab3 = st.tabs(["📈 ARIMA Price Forecasts", "🔥 GARCH Volatility", "🔮 Combined Models"])
 
-    # Prediction input
-    col1, col2 = st.columns(2)
-    with col1:
-        predict_ticker = st.text_input("Enter Ticker Symbol", value="AAPL")
-    with col2:
-        prediction_horizon = st.selectbox("Prediction Horizon", ["1 Week", "1 Month", "3 Months"])
+    #---------- TAB 1: ARIMA ----------
+    with tab1:
+        st.subheader("ARIMA Price & Returns Forecasting")
 
-    if st.button("Generate Prediction", type="primary"):
-        st.warning("ML models not yet implemented. Coming in next update!")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            arima_ticker = st.text_input("Ticker Symbol", value="AAPL", key='arima_ticker')
+        with col2:
+            forecast_days = st.slider("Forecast Horizon (days)", 5, 90, 30, key='arima_days')
+        with col3:
+            forecast_type = st.selectbox("Forecast Type", ["Price", "Returns"], key='arima_type')
+
+        auto_arima = st.checkbox("Auto ARIMA (find best p,d,q)", value=True, key='auto_arima')
+
+        if not auto_arima:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                p_order = st.number_input("p (AR order)", 0, 5, 1, key='arima_p')
+            with col2:
+                d_order = st.number_input("d (differencing)", 0, 2, 1, key='arima_d')
+            with col3:
+                q_order = st.number_input("q (MA order)", 0, 5, 1, key='arima_q')
+        else:
+            p_order, d_order, q_order = 1, 1, 1
+
+        if st.button("Generate ARIMA Forecast", type="primary", key='run_arima'):
+            with st.spinner(f"Fetching data and fitting ARIMA model for {arima_ticker}..."):
+                # Fetch historical data
+                hist_data = get_historical_data([arima_ticker], period='2y')
+
+                if not hist_data.empty:
+                    prices = hist_data[arima_ticker].dropna()
+
+                    if forecast_type == "Price":
+                        data_to_model = prices
+                    else:  # Returns
+                        data_to_model = prices.pct_change().dropna()
+
+                    # Fit ARIMA
+                    arima_result = fit_arima_model(data_to_model, auto=auto_arima, order=(p_order, d_order, q_order))
+
+                    if arima_result:
+                        # Display model info
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Model Order (p,d,q)", f"{arima_result['order']}")
+                        with col2:
+                            st.metric("AIC", f"{arima_result['aic']:.2f}")
+                        with col3:
+                            st.metric("BIC", f"{arima_result['bic']:.2f}")
+
+                        # Generate forecast
+                        forecast_result = forecast_arima(arima_result['model'], steps=forecast_days, alpha=0.05)
+
+                        if forecast_result:
+                            # Create forecast dates
+                            last_date = data_to_model.index[-1]
+                            forecast_dates = pd.date_range(start=last_date, periods=forecast_days+1, freq='D')[1:]
+
+                            # Convert returns to prices if needed
+                            if forecast_type == "Returns":
+                                # For returns forecast, show as percentage
+                                forecast_values = forecast_result['forecast'] * 100
+                                lower_bound = forecast_result['lower'] * 100 if forecast_result['lower'] is not None else None
+                                upper_bound = forecast_result['upper'] * 100 if forecast_result['upper'] is not None else None
+                                y_label = "Returns (%)"
+                            else:
+                                # Price forecast
+                                forecast_values = forecast_result['forecast']
+                                lower_bound = forecast_result['lower']
+                                upper_bound = forecast_result['upper']
+                                y_label = "Price ($)"
+
+                            # Plot
+                            fig = go.Figure()
+
+                            # Historical data (last 90 days)
+                            historical_plot = data_to_model.tail(90)
+                            if forecast_type == "Returns":
+                                historical_plot = historical_plot * 100
+
+                            fig.add_trace(go.Scatter(
+                                x=historical_plot.index,
+                                y=historical_plot.values,
+                                mode='lines',
+                                name='Historical',
+                                line=dict(color='blue', width=2)
+                            ))
+
+                            # Forecast
+                            fig.add_trace(go.Scatter(
+                                x=forecast_dates,
+                                y=forecast_values,
+                                mode='lines',
+                                name='Forecast',
+                                line=dict(color='red', width=2, dash='dash')
+                            ))
+
+                            # Confidence interval
+                            if lower_bound is not None and upper_bound is not None:
+                                fig.add_trace(go.Scatter(
+                                    x=forecast_dates.tolist() + forecast_dates.tolist()[::-1],
+                                    y=upper_bound.tolist() + lower_bound.tolist()[::-1],
+                                    fill='toself',
+                                    fillcolor='rgba(255,0,0,0.1)',
+                                    line=dict(color='rgba(255,0,0,0)'),
+                                    name='95% Confidence Interval',
+                                    showlegend=True
+                                ))
+
+                            fig.update_layout(
+                                title=f"{arima_ticker} {forecast_type} Forecast (ARIMA{arima_result['order']})",
+                                xaxis_title="Date",
+                                yaxis_title=y_label,
+                                hovermode='x unified',
+                                height=500
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # Diagnostics
+                            with st.expander("📊 Model Diagnostics"):
+                                diagnostics = arima_diagnostics(arima_result['residuals'])
+
+                                if 'error' not in diagnostics:
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.metric("Residual Mean", f"{diagnostics['residual_mean']:.6f}")
+                                        st.metric("Residual Std", f"{diagnostics['residual_std']:.6f}")
+                                    with col2:
+                                        st.metric("Jarque-Bera Statistic", f"{diagnostics['jb_statistic']:.2f}")
+                                        st.metric("JB p-value", f"{diagnostics['jb_pvalue']:.4f}")
+
+                                    if diagnostics['is_normal']:
+                                        st.success("✅ Residuals appear normally distributed (JB test)")
+                                    else:
+                                        st.warning("⚠️ Residuals may not be normally distributed")
+
+                                    # Ljung-Box test
+                                    st.write("**Ljung-Box Test for Autocorrelation:**")
+                                    st.dataframe(diagnostics['ljung_box'], use_container_width=True)
+                                else:
+                                    st.error(f"Diagnostic error: {diagnostics['error']}")
+                else:
+                    st.error(f"Could not fetch data for {arima_ticker}")
+
+    #---------- TAB 2: GARCH ----------
+    with tab2:
+        st.subheader("GARCH Volatility Modeling & Forecasting")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            garch_ticker = st.text_input("Ticker Symbol", value="AAPL", key='garch_ticker')
+        with col2:
+            garch_horizon = st.slider("Forecast Horizon (days)", 5, 90, 30, key='garch_horizon')
+        with col3:
+            model_type = st.selectbox("Model Type", ["GARCH", "EGARCH", "GJR-GARCH"], key='garch_model_type')
+
+        col1, col2 = st.columns(2)
+        with col1:
+            garch_p_param = st.selectbox("GARCH p (lag)", [1, 2, 3], index=0, key='garch_p_param')
+        with col2:
+            garch_q_param = st.selectbox("GARCH q (lag)", [1, 2, 3], index=0, key='garch_q_param')
+
+        if st.button("Run GARCH Forecast", type="primary", key='run_garch'):
+            with st.spinner(f"Fitting GARCH model for {garch_ticker}..."):
+                # Fetch data
+                hist_data = get_historical_data([garch_ticker], period='2y')
+
+                if not hist_data.empty:
+                    prices = hist_data[garch_ticker].dropna()
+                    returns = prices.pct_change().dropna()
+
+                    # Fit GARCH
+                    garch_result = fit_garch_model(returns, p=garch_p_param, q=garch_q_param, model_type=model_type)
+
+                    if garch_result:
+                        # Model stats
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Model", f"{model_type}({garch_p_param},{garch_q_param})")
+                        with col2:
+                            st.metric("AIC", f"{garch_result['aic']:.2f}")
+                        with col3:
+                            st.metric("BIC", f"{garch_result['bic']:.2f}")
+
+                        # Forecast volatility
+                        vol_forecast = forecast_volatility(garch_result['model'], horizon=garch_horizon)
+
+                        if vol_forecast:
+                            # Plot
+                            fig = go.Figure()
+
+                            # Historical conditional volatility (last 180 days)
+                            hist_vol = garch_result['conditional_volatility'].tail(180) / 100 * np.sqrt(252) * 100
+                            fig.add_trace(go.Scatter(
+                                x=returns.index[-len(hist_vol):],
+                                y=hist_vol.values,
+                                mode='lines',
+                                name='Historical Volatility',
+                                line=dict(color='orange', width=2)
+                            ))
+
+                            # Forecast
+                            forecast_dates = pd.date_range(
+                                start=returns.index[-1],
+                                periods=garch_horizon+1,
+                                freq='D'
+                            )[1:]
+
+                            fig.add_trace(go.Scatter(
+                                x=forecast_dates,
+                                y=vol_forecast['volatility'] * np.sqrt(252) * 100,
+                                mode='lines',
+                                name='Volatility Forecast',
+                                line=dict(color='red', width=2, dash='dash')
+                            ))
+
+                            fig.update_layout(
+                                title=f"{garch_ticker} Volatility Forecast ({model_type}({garch_p_param},{garch_q_param}))",
+                                xaxis_title="Date",
+                                yaxis_title="Annualized Volatility (%)",
+                                hovermode='x unified',
+                                height=500
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # Current vs forecast volatility
+                            current_vol = garch_result['conditional_volatility'].iloc[-1] / 100 * np.sqrt(252) * 100
+                            forecast_vol_avg = vol_forecast['volatility'].mean() * np.sqrt(252) * 100
+
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Current Volatility", f"{current_vol:.2f}%")
+                            with col2:
+                                st.metric("Avg Forecast Volatility", f"{forecast_vol_avg:.2f}%")
+                            with col3:
+                                change = forecast_vol_avg - current_vol
+                                st.metric("Expected Change", f"{change:+.2f}%")
+
+                            # Use case examples
+                            with st.expander("💡 Use Cases for GARCH Volatility"):
+                                st.write("""
+                                **Options Pricing**: Use forecasted volatility as input for Black-Scholes model
+
+                                **Risk Management**: Adjust position sizes based on volatility regime
+
+                                **VaR Calculation**: GARCH-based VaR captures time-varying volatility
+
+                                **Trading Signals**: High volatility = higher option premiums, tighter stops
+                                """)
+                else:
+                    st.error(f"Could not fetch data for {garch_ticker}")
+
+    #---------- TAB 3: COMBINED MODELS ----------
+    with tab3:
+        st.subheader("Combined ARIMA-GARCH Forecasting")
+
+        st.info("""
+        **Combined Model Approach:**
+        1. **ARIMA** models the conditional mean (price trend)
+        2. **GARCH** models the conditional variance (volatility clustering)
+        3. Together they provide complete price distribution forecasts
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            combined_ticker = st.text_input("Ticker Symbol", value="AAPL", key='combined_ticker')
+        with col2:
+            combined_horizon = st.slider("Forecast Horizon (days)", 5, 60, 30, key='combined_horizon')
+
+        if st.button("Run Combined Forecast", type="primary", key='run_combined'):
+            with st.spinner(f"Fitting combined ARIMA-GARCH model for {combined_ticker}..."):
+                # Fetch data
+                hist_data = get_historical_data([combined_ticker], period='2y')
+
+                if not hist_data.empty:
+                    prices = hist_data[combined_ticker].dropna()
+                    returns = prices.pct_change().dropna()
+
+                    # Fit ARIMA to returns
+                    arima_result = fit_arima_model(returns, auto=True)
+
+                    # Fit GARCH to residuals or returns
+                    garch_result = fit_garch_model(returns, p=1, q=1)
+
+                    if arima_result and garch_result:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**ARIMA Component:**")
+                            st.metric("Order", f"{arima_result['order']}")
+                            st.metric("AIC", f"{arima_result['aic']:.2f}")
+                        with col2:
+                            st.write("**GARCH Component:**")
+                            st.metric("Order", f"(1,1)")
+                            st.metric("AIC", f"{garch_result['aic']:.2f}")
+
+                        # Generate forecasts
+                        arima_forecast = forecast_arima(arima_result['model'], steps=combined_horizon)
+                        garch_forecast = forecast_volatility(garch_result['model'], horizon=combined_horizon)
+
+                        if arima_forecast and garch_forecast:
+                            # Monte Carlo simulation with ARIMA mean and GARCH volatility
+                            n_simulations = 1000
+                            forecast_dates = pd.date_range(
+                                start=returns.index[-1],
+                                periods=combined_horizon+1,
+                                freq='D'
+                            )[1:]
+
+                            simulated_prices = np.zeros((n_simulations, combined_horizon))
+                            last_price = prices.iloc[-1]
+
+                            for sim in range(n_simulations):
+                                price_path = [last_price]
+                                for i in range(combined_horizon):
+                                    # Sample return from ARIMA forecast + GARCH volatility
+                                    mean_return = arima_forecast['forecast'][i]
+                                    vol = garch_forecast['volatility'][i] / 100  # Convert to decimal
+                                    simulated_return = np.random.normal(mean_return, vol)
+                                    next_price = price_path[-1] * (1 + simulated_return)
+                                    price_path.append(next_price)
+                                    simulated_prices[sim, i] = next_price
+
+                            # Calculate percentiles
+                            median_forecast = np.median(simulated_prices, axis=0)
+                            lower_5 = np.percentile(simulated_prices, 5, axis=0)
+                            upper_95 = np.percentile(simulated_prices, 95, axis=0)
+                            lower_25 = np.percentile(simulated_prices, 25, axis=0)
+                            upper_75 = np.percentile(simulated_prices, 75, axis=0)
+
+                            # Plot
+                            fig = go.Figure()
+
+                            # Historical prices
+                            fig.add_trace(go.Scatter(
+                                x=prices.tail(90).index,
+                                y=prices.tail(90).values,
+                                mode='lines',
+                                name='Historical',
+                                line=dict(color='blue', width=2)
+                            ))
+
+                            # Median forecast
+                            fig.add_trace(go.Scatter(
+                                x=forecast_dates,
+                                y=median_forecast,
+                                mode='lines',
+                                name='Median Forecast',
+                                line=dict(color='red', width=2)
+                            ))
+
+                            # 90% confidence interval
+                            fig.add_trace(go.Scatter(
+                                x=forecast_dates.tolist() + forecast_dates.tolist()[::-1],
+                                y=upper_95.tolist() + lower_5.tolist()[::-1],
+                                fill='toself',
+                                fillcolor='rgba(255,0,0,0.1)',
+                                line=dict(color='rgba(255,0,0,0)'),
+                                name='90% Confidence',
+                                showlegend=True
+                            ))
+
+                            # 50% confidence interval
+                            fig.add_trace(go.Scatter(
+                                x=forecast_dates.tolist() + forecast_dates.tolist()[::-1],
+                                y=upper_75.tolist() + lower_25.tolist()[::-1],
+                                fill='toself',
+                                fillcolor='rgba(255,0,0,0.2)',
+                                line=dict(color='rgba(255,0,0,0)'),
+                                name='50% Confidence',
+                                showlegend=True
+                            ))
+
+                            fig.update_layout(
+                                title=f"{combined_ticker} Combined ARIMA-GARCH Price Forecast",
+                                xaxis_title="Date",
+                                yaxis_title="Price ($)",
+                                hovermode='x unified',
+                                height=500
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # Summary stats
+                            final_median = median_forecast[-1]
+                            final_lower = lower_5[-1]
+                            final_upper = upper_95[-1]
+
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Current Price", f"${last_price:.2f}")
+                            with col2:
+                                st.metric(f"{combined_horizon}-Day Median", f"${final_median:.2f}")
+                            with col3:
+                                expected_return = (final_median - last_price) / last_price * 100
+                                st.metric("Expected Return", f"{expected_return:+.2f}%")
+                            with col4:
+                                st.metric("90% Range", f"${final_lower:.2f} - ${final_upper:.2f}")
+                else:
+                    st.error(f"Could not fetch data for {combined_ticker}")
 
 # Footer
 st.markdown("---")

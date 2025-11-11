@@ -24,6 +24,13 @@ tensorflow>=2.15.0  # or tensorflow-macos for Apple Silicon
 prophet>=1.1.5
 statsmodels>=0.14.0
 
+# Time Series & Volatility Models
+arch>=6.0.0  # For ARCH/GARCH models
+pmdarima>=2.0.0  # For auto-ARIMA model selection
+
+# Copula Analysis
+copulas>=0.9.0  # For multivariate dependence modeling
+
 # Options Pricing
 py_vollib>=1.0.1  # For Black-Scholes and Greeks
 
