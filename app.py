@@ -911,17 +911,19 @@ elif page == "Stock Screener":
     st.subheader(f"Screener Results ({len(filtered_tickers)} stocks)")
 
     if len(filtered_tickers) > 0:
-        # Batch fetch prices for filtered tickers
+        # Batch fetch prices and company names for filtered tickers
         with st.spinner(f"Fetching data for {len(filtered_tickers)} stocks..."):
             screener_data = []
             for ticker in filtered_tickers[:20]:  # Limit to 20 for demo
-                price = get_current_price(ticker)
-                if price:
+                stock_info = get_stock_info(ticker)
+                if stock_info:
                     screener_data.append({
                         'Symbol': ticker,
-                        'Sector': sector_map.get(ticker, 'Other'),
-                        'Price': price,
-                        'Add': False
+                        'Company': stock_info['name'],
+                        'Sector': sector_map.get(ticker, stock_info.get('sector', 'Other')),
+                        'Price': stock_info['current_price'],
+                        'Market Cap': stock_info['market_cap'],
+                        'P/E': stock_info['pe_ratio'] if stock_info['pe_ratio'] else None
                     })
 
         if screener_data:
@@ -929,8 +931,13 @@ elif page == "Stock Screener":
 
             # Display with selection
             st.dataframe(
-                screener_df.style.format({'Price': '${:.2f}'}),
-                use_container_width=True
+                screener_df.style.format({
+                    'Price': '${:.2f}',
+                    'Market Cap': lambda x: f"${x/1e9:.2f}B" if x > 0 else "N/A",
+                    'P/E': lambda x: f"{x:.2f}" if pd.notna(x) else "N/A"
+                }),
+                use_container_width=True,
+                height=600
             )
 
             # Quick add to portfolio
