@@ -2903,9 +2903,18 @@ elif page == "Options Pricing":
         # Greeks interpretation
         st.markdown("#### Greeks Interpretation")
 
-        delta_interp = f"For every $1 increase in stock price, the option price changes by **${abs(greeks['delta']):.4f}**"
+        if greeks['delta'] >= 0:
+            delta_interp = f"For every $1 increase in stock price, the option price increases by **${greeks['delta']:.4f}**"
+        else:
+            delta_interp = f"For every $1 increase in stock price, the option price decreases by **${abs(greeks['delta']):.4f}**"
+
         gamma_interp = f"Delta changes by **{greeks['gamma']:.4f}** for each $1 move in stock price"
-        theta_interp = f"Option loses **${abs(greeks['theta']):.4f}** in value per day"
+
+        if greeks['theta'] >= 0:
+            theta_interp = f"Option gains **${greeks['theta']:.4f}** in value per day"
+        else:
+            theta_interp = f"Option loses **${abs(greeks['theta']):.4f}** in value per day (time decay)"
+
         vega_interp = f"Option price changes by **${greeks['vega']:.4f}** for each 1% change in volatility"
 
         st.write(f"**Delta:** {delta_interp}")
