@@ -144,6 +144,109 @@ def summarize_rule(symbol, rule_type, params=None, period="5y",
     return summary, fires
 
 
+def replay_composite(symbol, rules_list, combiner="all", period="5y",
+                     horizons: Sequence[int] = DEFAULT_HORIZONS):
+    """Replay multiple rules on a symbol with an AND/OR/MAJORITY combiner.
+
+    Args:
+      rules_list: list of (rule_type, params_dict). Tech + fundamental can mix.
+      combiner: 'all' (AND), 'any' (OR), 'majority' (>50% of rules fire)
+
+    Each bar is evaluated against every rule. If the combiner threshold
+    is met, the composite fires once for that bar with a message listing
+    which sub-rules contributed. Forward returns are computed as in
+    replay_rule.
+    """
+    if combiner not in ("all", "any", "majority"):
+        raise ValueError(f"Unknown combiner: {combiner!r}. Use 'all', 'any', or 'majority'.")
+    rules_list = [(rt, p or {}) for rt, p in rules_list]
+    if not rules_list:
+        return []
+    unknown = [rt for rt, _ in rules_list
+               if rt not in tech_rules.REGISTRY and rt not in fund_rules.REGISTRY]
+    if unknown:
+        raise ValueError(f"Unknown rule type(s): {unknown}")
+
+    has_tech = any(rt in tech_rules.REGISTRY for rt, _ in rules_list)
+    has_fund = any(rt in fund_rules.REGISTRY for rt, _ in rules_list)
+
+    df = yf.download(symbol, period=period, interval="1d",
+                     progress=False, auto_adjust=True)
+    df = flatten_columns(df)
+    if df.empty or len(df) < config.MA_SLOW + 5:
+        return []
+    if has_tech:
+        df = add_indicators(df,
+                            rsi_period=config.RSI_PERIOD,
+                            ma_fast=config.MA_FAST,
+                            ma_slow=config.MA_SLOW)
+    if has_fund:
+        from hedgeabove.data.edgar import get_fundamentals_as_of
+
+    fires = []
+    n = len(df)
+    n_rules = len(rules_list)
+    if combiner == "all":
+        min_to_fire = n_rules
+    elif combiner == "majority":
+        min_to_fire = n_rules // 2 + 1
+    else:  # any
+        min_to_fire = 1
+
+    for i in range(1, n):
+        latest = df.iloc[i]
+        prev = df.iloc[i - 1]
+        price = float(latest["Close"])
+        bar_dt = df.index[i]
+        bar_date = bar_dt.date() if hasattr(bar_dt, "date") else bar_dt
+
+        stock_info = None  # lazy fetch only if a fundamental rule is in the mix
+        fired_rule_names = []
+        for rule_type, params in rules_list:
+            if rule_type in tech_rules.REGISTRY:
+                msg = tech_rules.evaluate(rule_type, latest, prev, params)
+            else:
+                if stock_info is None:
+                    stock_info = get_fundamentals_as_of(symbol, bar_date, current_price=price)
+                msg = fund_rules.evaluate(rule_type, stock_info, params)
+            if msg is not None:
+                fired_rule_names.append(rule_type)
+
+        if len(fired_rule_names) < min_to_fire:
+            continue
+
+        composite_msg = f"[{combiner.upper()}: {' + '.join(fired_rule_names)}]"
+        fwd = {}
+        for h in horizons:
+            j = i + h
+            fwd[h] = (float(df.iloc[j]["Close"]) / price - 1) if j < n else None
+        fires.append(FireEvent(
+            fire_date=df.index[i],
+            message=composite_msg,
+            price_at_fire=price,
+            fwd_returns=fwd,
+        ))
+    return fires
+
+
+def summarize_composite(symbol, rules_list, combiner="all", period="5y",
+                        horizons: Sequence[int] = DEFAULT_HORIZONS):
+    """Replay + aggregate stats for a composite of rules. Returns
+    (summary_dict, fire_events). The summary's ``rule_type`` is a
+    descriptive label like ``[ALL: rsi_oversold,golden_cross]`` for
+    display, not a registered rule name."""
+    fires = replay_composite(symbol, rules_list, combiner, period, horizons)
+    label = f"[{combiner.upper()}: " + ",".join(rt for rt, _ in rules_list) + "]"
+    summary = {
+        "symbol": symbol,
+        "rule_type": label,
+        "params": {},
+        "period": period,
+        **summarize_fires(fires, horizons),
+    }
+    return summary, fires
+
+
 def fires_to_dataframe(fires, horizons: Sequence[int] = DEFAULT_HORIZONS):
     """Convert a list of FireEvents to a wide DataFrame for display/export."""
     rows = []

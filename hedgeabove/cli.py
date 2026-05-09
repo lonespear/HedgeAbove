@@ -219,12 +219,27 @@ def cmd_rules_available(args):
 
 def cmd_strategy(args):
     from hedgeabove.backtest.strategy import simulate_basket, trades_to_dataframe
-    if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
-        print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
-        sys.exit(1)
-    if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
-        print(f"'{args.rule_type}' isn't yet backtestable.", file=sys.stderr)
-        sys.exit(1)
+
+    rules_list = None
+    if args.rules:
+        rules_list = [(rt.strip(), {}) for rt in args.rules.split(",") if rt.strip()]
+        for rt, _ in rules_list:
+            if rt not in tech_rules.REGISTRY and rt not in fund_rules.REGISTRY:
+                print(f"Unknown rule type: {rt}", file=sys.stderr)
+                sys.exit(1)
+            if rt in {"analyst_upside_above", "dividend_yield_above"}:
+                print(f"'{rt}' isn't yet backtestable.", file=sys.stderr)
+                sys.exit(1)
+    else:
+        if not args.rule_type:
+            print("Need rule_type or --rules", file=sys.stderr)
+            sys.exit(1)
+        if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
+            print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
+            sys.exit(1)
+        if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
+            print(f"'{args.rule_type}' isn't yet backtestable.", file=sys.stderr)
+            sys.exit(1)
 
     if args.symbols:
         symbols = [s.strip().upper() for s in args.symbols.split(",")]
@@ -242,12 +257,19 @@ def cmd_strategy(args):
         sys.exit(1)
 
     params = dict(args.param) if args.param else {}
-    print(f"\nSimulating '{args.rule_type}' on {len(symbols)} ticker(s)  "
-          f"period={args.period}  hold={args.hold_days}d  params={params}")
-
-    res = simulate_basket(symbols, args.rule_type, params,
-                          period=args.period, hold_days=args.hold_days,
-                          benchmark=args.benchmark)
+    if rules_list is not None:
+        label = f"[{args.combine.upper()}: {','.join(rt for rt, _ in rules_list)}]"
+        print(f"\nSimulating composite {label} on {len(symbols)} ticker(s)  "
+              f"period={args.period}  hold={args.hold_days}d")
+        res = simulate_basket(symbols, rules=rules_list, combiner=args.combine,
+                              period=args.period, hold_days=args.hold_days,
+                              benchmark=args.benchmark)
+    else:
+        print(f"\nSimulating '{args.rule_type}' on {len(symbols)} ticker(s)  "
+              f"period={args.period}  hold={args.hold_days}d  params={params}")
+        res = simulate_basket(symbols, args.rule_type, params,
+                              period=args.period, hold_days=args.hold_days,
+                              benchmark=args.benchmark)
     s = res["summary"]
     if not s.get("n_trades"):
         print("No trades — rule never fired (or no future bars to close).")
@@ -370,19 +392,36 @@ def cmd_score(args):
 
 
 def cmd_analyze(args):
-    from hedgeabove.backtest.signals import summarize_rule, DEFAULT_HORIZONS
-    if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
-        print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
-        sys.exit(1)
-    if args.rule_type in fund_rules.REGISTRY:
-        if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
-            print(f"'{args.rule_type}' isn't yet backtestable (no point-in-time source for "
-                  f"analyst targets / dividends).", file=sys.stderr)
-            sys.exit(1)
-    params_dict = dict(args.param) if args.param else {}
+    from hedgeabove.backtest.signals import (
+        summarize_rule, summarize_composite, DEFAULT_HORIZONS,
+    )
     sym = args.symbol.upper()
-    print(f"\nAnalyzing {sym} :: {args.rule_type}  params={params_dict}  period={args.period}")
-    summary, fires = summarize_rule(sym, args.rule_type, params_dict, args.period)
+    params_dict = dict(args.param) if args.param else {}
+
+    if args.rules:
+        rules_list = [(rt.strip(), {}) for rt in args.rules.split(",") if rt.strip()]
+        for rt, _ in rules_list:
+            if rt not in tech_rules.REGISTRY and rt not in fund_rules.REGISTRY:
+                print(f"Unknown rule type: {rt}", file=sys.stderr)
+                sys.exit(1)
+            if rt in {"analyst_upside_above", "dividend_yield_above"}:
+                print(f"'{rt}' isn't yet backtestable.", file=sys.stderr)
+                sys.exit(1)
+        label = f"[{args.combine.upper()}: {','.join(rt for rt, _ in rules_list)}]"
+        print(f"\nAnalyzing {sym} :: {label}  period={args.period}")
+        summary, fires = summarize_composite(sym, rules_list, args.combine, args.period)
+    else:
+        if not args.rule_type:
+            print("Need rule_type or --rules", file=sys.stderr)
+            sys.exit(1)
+        if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
+            print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
+            sys.exit(1)
+        if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
+            print(f"'{args.rule_type}' isn't yet backtestable.", file=sys.stderr)
+            sys.exit(1)
+        print(f"\nAnalyzing {sym} :: {args.rule_type}  params={params_dict}  period={args.period}")
+        summary, fires = summarize_rule(sym, args.rule_type, params_dict, args.period)
     print(f"  Total fires: {summary['n_fires']}")
     if summary["n_fires"] == 0:
         print("  Rule never fired in this window. Try a different threshold or longer period.")
@@ -488,8 +527,11 @@ def _build_parser():
 
     sub.add_parser("presets", help="List built-in factor presets")
 
-    pst = sub.add_parser("strategy", help="Backtest a single-position long basket strategy")
-    pst.add_argument("rule_type")
+    pst = sub.add_parser("strategy", help="Backtest a single-position long basket strategy (single rule or composite)")
+    pst.add_argument("rule_type", nargs="?", help="Single rule (or use --rules)")
+    pst.add_argument("--rules", help="Comma-separated rules for composite strategies")
+    pst.add_argument("--combine", choices=["all", "any", "majority"], default="all",
+                     help="Combiner for --rules: all=AND (default), any=OR, majority=>50%%")
     pstg = pst.add_mutually_exclusive_group(required=True)
     pstg.add_argument("--symbols", help="Comma-separated tickers")
     pstg.add_argument("--watchlist", help="Use this watchlist group's tickers")
@@ -513,12 +555,15 @@ def _build_parser():
     psc.add_argument("--top", type=int, default=20, help="Number of top names to show / save")
     psc.add_argument("--save-as", help="Save the top-N as a watchlist group with this name")
 
-    pa = sub.add_parser("analyze", help="Backtest a technical rule on a symbol")
+    pa = sub.add_parser("analyze", help="Backtest a single rule, or a composite via --rules")
     pa.add_argument("symbol")
-    pa.add_argument("rule_type")
+    pa.add_argument("rule_type", nargs="?", help="Single rule (or use --rules a,b for composite)")
+    pa.add_argument("--rules", help="Comma-separated rules for composite analysis (replaces rule_type)")
+    pa.add_argument("--combine", choices=["all", "any", "majority"], default="all",
+                    help="Combiner for --rules: all=AND (default), any=OR, majority=>50%%")
     pa.add_argument("--period", default="5y", help="yfinance period (e.g. 1y, 5y, max). Default: 5y")
     pa.add_argument("--param", type=_parse_param, action="append",
-                    help="Override default rule params, e.g. --param threshold=25")
+                    help="Override default rule params for single-rule mode, e.g. --param threshold=25")
     pa.add_argument("--show-fires", action="store_true",
                     help="Also print the last 10 fire events with forward returns")
     pa.add_argument("--by-regime", choices=["vix", "yield_curve"],

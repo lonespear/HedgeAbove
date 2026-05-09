@@ -44,8 +44,9 @@ class Trade:
     rule_message: str
 
 
-def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
-                    starting_nav=1.0, benchmark="SPY"):
+def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days=20,
+                    starting_nav=1.0, benchmark="SPY",
+                    rules=None, combiner="all"):
     """Run the single-position basket simulator.
 
     Args:
@@ -70,8 +71,12 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
       benchmark_curve: pd.Series of daily benchmark NAV over the same
                        span (same starting_nav). Empty if benchmark=None.
     """
-    from hedgeabove.backtest.signals import replay_rule
+    from hedgeabove.backtest.signals import replay_rule, replay_composite
 
+    if rules is not None and rule_type is not None:
+        raise ValueError("Pass either rule_type (single) or rules (list), not both.")
+    if rules is None and rule_type is None:
+        raise ValueError("Need rule_type (single) or rules (list of (rt, params)).")
     params = params or {}
 
     # Bars per symbol — needed to find exit prices `hold_days` after entry.
@@ -83,11 +88,14 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
         if not df.empty:
             bars_map[s] = df
 
-    # Replay rule on each symbol → chronological fire list.
+    # Replay rule(s) on each symbol → chronological fire list.
     all_fires = []
     for s, df in bars_map.items():
         try:
-            fires = replay_rule(s, rule_type, params, period)
+            if rules is not None:
+                fires = replay_composite(s, rules, combiner=combiner, period=period)
+            else:
+                fires = replay_rule(s, rule_type, params, period)
         except Exception:
             fires = []
         for f in fires:
