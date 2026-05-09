@@ -46,13 +46,19 @@ class FireEvent:
 
 
 def replay_rule(symbol, rule_type, params=None, period="5y",
-                horizons: Sequence[int] = DEFAULT_HORIZONS):
+                horizons: Sequence[int] = DEFAULT_HORIZONS,
+                exclude_earnings_window=None):
     """Replay one rule (technical or fundamental) over historical bars for
     one symbol. Returns a list of FireEvent.
 
     For fundamental rules, point-in-time fundamentals are pulled from SEC
     EDGAR via ``hedgeabove.data.edgar.get_fundamentals_as_of`` at each bar's
     date — no look-ahead.
+
+    Args:
+      exclude_earnings_window: optional ``(days_before, days_after)`` tuple.
+        Fires whose date is within that window of any known earnings date
+        for ``symbol`` are dropped — useful to avoid earnings-gap risk.
     """
     is_technical = rule_type in tech_rules.REGISTRY
     is_fundamental = rule_type in fund_rules.REGISTRY
@@ -100,6 +106,11 @@ def replay_rule(symbol, rule_type, params=None, period="5y",
             price_at_fire=price,
             fwd_returns=fwd,
         ))
+    if exclude_earnings_window is not None and fires:
+        from hedgeabove.data.earnings import is_within_earnings_window
+        db, da = exclude_earnings_window
+        fires = [f for f in fires
+                 if not is_within_earnings_window(symbol, f.fire_date, db, da)]
     return fires
 
 
@@ -131,9 +142,11 @@ def summarize_fires(fires, horizons: Sequence[int] = DEFAULT_HORIZONS):
 
 
 def summarize_rule(symbol, rule_type, params=None, period="5y",
-                   horizons: Sequence[int] = DEFAULT_HORIZONS):
+                   horizons: Sequence[int] = DEFAULT_HORIZONS,
+                   exclude_earnings_window=None):
     """Convenience: replay + summarize. Returns (summary_dict, fire_events)."""
-    fires = replay_rule(symbol, rule_type, params, period, horizons)
+    fires = replay_rule(symbol, rule_type, params, period, horizons,
+                        exclude_earnings_window=exclude_earnings_window)
     summary = {
         "symbol": symbol,
         "rule_type": rule_type,
@@ -145,7 +158,8 @@ def summarize_rule(symbol, rule_type, params=None, period="5y",
 
 
 def replay_composite(symbol, rules_list, combiner="all", period="5y",
-                     horizons: Sequence[int] = DEFAULT_HORIZONS):
+                     horizons: Sequence[int] = DEFAULT_HORIZONS,
+                     exclude_earnings_window=None):
     """Replay multiple rules on a symbol with an AND/OR/MAJORITY combiner.
 
     Args:
@@ -226,16 +240,23 @@ def replay_composite(symbol, rules_list, combiner="all", period="5y",
             price_at_fire=price,
             fwd_returns=fwd,
         ))
+    if exclude_earnings_window is not None and fires:
+        from hedgeabove.data.earnings import is_within_earnings_window
+        db, da = exclude_earnings_window
+        fires = [f for f in fires
+                 if not is_within_earnings_window(symbol, f.fire_date, db, da)]
     return fires
 
 
 def summarize_composite(symbol, rules_list, combiner="all", period="5y",
-                        horizons: Sequence[int] = DEFAULT_HORIZONS):
+                        horizons: Sequence[int] = DEFAULT_HORIZONS,
+                        exclude_earnings_window=None):
     """Replay + aggregate stats for a composite of rules. Returns
     (summary_dict, fire_events). The summary's ``rule_type`` is a
     descriptive label like ``[ALL: rsi_oversold,golden_cross]`` for
     display, not a registered rule name."""
-    fires = replay_composite(symbol, rules_list, combiner, period, horizons)
+    fires = replay_composite(symbol, rules_list, combiner, period, horizons,
+                             exclude_earnings_window=exclude_earnings_window)
     label = f"[{combiner.upper()}: " + ",".join(rt for rt, _ in rules_list) + "]"
     summary = {
         "symbol": symbol,

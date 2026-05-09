@@ -52,6 +52,18 @@ def _parse_param(s):
     return k, v
 
 
+def _parse_earnings_window(s):
+    """Parse N1,N2 -> (N1, N2) tuple of ints."""
+    parts = [p.strip() for p in s.split(",")]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            f"--exclude-earnings expects N_before,N_after; got {s!r}")
+    try:
+        return (int(parts[0]), int(parts[1]))
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"--exclude-earnings values must be ints: {e}")
+
+
 _DEFAULT_TICKERS = ["AAPL", "NVDA", "TSLA", "SPY", "BTC-USD", "ETH-USD"]
 _DEFAULT_RULES = [
     "rsi_oversold", "rsi_overbought",
@@ -258,22 +270,27 @@ def cmd_strategy(args):
         sys.exit(1)
 
     params = dict(args.param) if args.param else {}
+    excl_win = args.exclude_earnings
     if rules_list is not None:
         label = f"[{args.combine.upper()}: {','.join(rt for rt, _ in rules_list)}]"
         print(f"\nSimulating composite {label} on {len(symbols)} ticker(s)  "
-              f"period={args.period}  hold={args.hold_days}d  max_concurrent={args.max_concurrent}")
+              f"period={args.period}  hold={args.hold_days}d  max_concurrent={args.max_concurrent}"
+              + (f"  exclude_earnings={excl_win}" if excl_win else ""))
         res = simulate_basket(symbols, rules=rules_list, combiner=args.combine,
                               period=args.period, hold_days=args.hold_days,
                               benchmark=args.benchmark,
-                              max_concurrent=args.max_concurrent)
+                              max_concurrent=args.max_concurrent,
+                              exclude_earnings_window=excl_win)
     else:
         print(f"\nSimulating '{args.rule_type}' on {len(symbols)} ticker(s)  "
               f"period={args.period}  hold={args.hold_days}d  params={params}  "
-              f"max_concurrent={args.max_concurrent}")
+              f"max_concurrent={args.max_concurrent}"
+              + (f"  exclude_earnings={excl_win}" if excl_win else ""))
         res = simulate_basket(symbols, args.rule_type, params,
                               period=args.period, hold_days=args.hold_days,
                               benchmark=args.benchmark,
-                              max_concurrent=args.max_concurrent)
+                              max_concurrent=args.max_concurrent,
+                              exclude_earnings_window=excl_win)
     s = res["summary"]
     if not s.get("n_trades"):
         print("No trades — rule never fired (or no future bars to close).")
@@ -492,6 +509,7 @@ def cmd_analyze(args):
     sym = args.symbol.upper()
     params_dict = dict(args.param) if args.param else {}
 
+    excl_win = args.exclude_earnings  # already parsed to tuple by _parse_earnings_window
     if args.rules:
         rules_list = [(rt.strip(), {}) for rt in args.rules.split(",") if rt.strip()]
         for rt, _ in rules_list:
@@ -502,8 +520,10 @@ def cmd_analyze(args):
                 print(f"'{rt}' isn't yet backtestable.", file=sys.stderr)
                 sys.exit(1)
         label = f"[{args.combine.upper()}: {','.join(rt for rt, _ in rules_list)}]"
-        print(f"\nAnalyzing {sym} :: {label}  period={args.period}")
-        summary, fires = summarize_composite(sym, rules_list, args.combine, args.period)
+        print(f"\nAnalyzing {sym} :: {label}  period={args.period}"
+              + (f"  exclude_earnings={excl_win}" if excl_win else ""))
+        summary, fires = summarize_composite(sym, rules_list, args.combine, args.period,
+                                             exclude_earnings_window=excl_win)
     else:
         if not args.rule_type:
             print("Need rule_type or --rules", file=sys.stderr)
@@ -514,8 +534,10 @@ def cmd_analyze(args):
         if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
             print(f"'{args.rule_type}' isn't yet backtestable.", file=sys.stderr)
             sys.exit(1)
-        print(f"\nAnalyzing {sym} :: {args.rule_type}  params={params_dict}  period={args.period}")
-        summary, fires = summarize_rule(sym, args.rule_type, params_dict, args.period)
+        print(f"\nAnalyzing {sym} :: {args.rule_type}  params={params_dict}  period={args.period}"
+              + (f"  exclude_earnings={excl_win}" if excl_win else ""))
+        summary, fires = summarize_rule(sym, args.rule_type, params_dict, args.period,
+                                        exclude_earnings_window=excl_win)
     print(f"  Total fires: {summary['n_fires']}")
     if summary["n_fires"] == 0:
         print("  Rule never fired in this window. Try a different threshold or longer period.")
@@ -656,6 +678,10 @@ def _build_parser():
     pst.add_argument("--max-concurrent", type=int, default=1,
                      help="Maximum simultaneous open positions (default 1 = single-position).  "
                           "Each gets 1/max_concurrent of NAV at entry; cash funds new entries.")
+    pst.add_argument("--exclude-earnings", type=_parse_earnings_window, default=None,
+                     metavar="N_BEFORE,N_AFTER",
+                     help="Drop fires within this earnings window (e.g. 5,5).  "
+                          "Skips entries near earnings to avoid gap risk.")
     pst.add_argument("--show-trades", action="store_true", help="Print last 15 trades")
     pst.add_argument("--tearsheet", action="store_true",
                      help="Print calendar-year returns, drawdown stats, rolling Sharpe, beta")
@@ -683,6 +709,10 @@ def _build_parser():
                     help="Also print the last 10 fire events with forward returns")
     pa.add_argument("--by-regime", choices=["vix", "yield_curve"],
                     help="Break down forward returns by macro regime (FRED VIXCLS or 2s10s slope)")
+    pa.add_argument("--exclude-earnings", type=_parse_earnings_window, default=None,
+                    metavar="N_BEFORE,N_AFTER",
+                    help="Drop fires within this earnings window (e.g. 5,5 = 5 days before & after).  "
+                         "Uses yfinance earnings_dates -- free, no API key.")
 
     ps = sub.add_parser("snooze", help="Mute alerts for a ticker")
     pss = ps.add_subparsers(dest="action", required=True)

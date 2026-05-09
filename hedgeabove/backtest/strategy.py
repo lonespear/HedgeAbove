@@ -50,7 +50,8 @@ class Trade:
 def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days=20,
                     starting_nav=1.0, benchmark="SPY",
                     rules=None, combiner="all",
-                    max_concurrent=1):
+                    max_concurrent=1,
+                    exclude_earnings_window=None):
     """Run the single-position basket simulator.
 
     Args:
@@ -97,9 +98,11 @@ def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days
     for s, df in bars_map.items():
         try:
             if rules is not None:
-                fires = replay_composite(s, rules, combiner=combiner, period=period)
+                fires = replay_composite(s, rules, combiner=combiner, period=period,
+                                         exclude_earnings_window=exclude_earnings_window)
             else:
-                fires = replay_rule(s, rule_type, params, period)
+                fires = replay_rule(s, rule_type, params, period,
+                                    exclude_earnings_window=exclude_earnings_window)
         except Exception:
             fires = []
         for f in fires:
