@@ -20,6 +20,11 @@ import sys
 
 from hedgeabove import db
 from hedgeabove.rules import technical as tech_rules
+from hedgeabove.rules import fundamental as fund_rules
+
+
+def _all_rule_types():
+    return sorted(set(tech_rules.REGISTRY) | set(fund_rules.REGISTRY))
 
 
 _DEFAULT_TICKERS = ["AAPL", "NVDA", "TSLA", "SPY", "BTC-USD", "ETH-USD"]
@@ -92,9 +97,9 @@ def cmd_rule(args):
                 params_str = "" if params == "{}" else f" {params}"
                 print(f"    [{rid}] {flag} {rt}{params_str}")
     elif args.action == "add":
-        if args.rule_type not in tech_rules.REGISTRY:
+        if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
             print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
-            print(f"Available: {tech_rules.available_rules()}", file=sys.stderr)
+            print(f"Available: {_all_rule_types()}", file=sys.stderr)
             sys.exit(1)
         gid = _resolve_group_or_die(args.group_name)
         rid = db.add_alert_rule(gid, args.rule_type)
@@ -116,8 +121,12 @@ def cmd_scan_once(args):
 
 
 def cmd_rules_available(args):
-    print("Registered rule types:")
+    print("Technical rules (need price history):")
     for rt in tech_rules.available_rules():
+        print(f"  - {rt}")
+    print()
+    print("Fundamental rules (need ticker.info):")
+    for rt in fund_rules.available_rules():
         print(f"  - {rt}")
 
 

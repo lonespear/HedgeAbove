@@ -1,14 +1,43 @@
 """
 Market data fetching via yfinance.
-All functions use Streamlit caching for performance.
+
+Cached via Streamlit's @st.cache_data when running inside Streamlit; falls
+back to a no-op decorator in headless contexts (cron / scan.py) so the
+module imports cleanly without Streamlit installed.
 """
 
-import streamlit as st
 import pandas as pd
 import yfinance as yf
 
+def _noop_cache(*args, **kwargs):
+    """No-op decorator factory used in headless contexts."""
+    def deco(fn):
+        return fn
+    return deco
 
-@st.cache_data(ttl=300)
+
+def _resolve_cache_decorator():
+    """Return @st.cache_data when running inside `streamlit run`; otherwise
+    return a no-op decorator. This keeps Streamlit-installed venvs from
+    spamming "no runtime found" warnings when used to run scan.py / cron.
+
+    We probe `streamlit.runtime.exists()` — it returns True only when the
+    Streamlit server is up — without emitting any of Streamlit's own warnings.
+    """
+    try:
+        import streamlit as st
+        from streamlit.runtime import exists as _runtime_exists
+        if _runtime_exists():
+            return st.cache_data
+    except Exception:
+        pass
+    return _noop_cache
+
+
+_cache_data = _resolve_cache_decorator()
+
+
+@_cache_data(ttl=300)
 def get_current_price(symbol):
     """Fetch current price from yfinance."""
     try:
@@ -21,7 +50,7 @@ def get_current_price(symbol):
         return None
 
 
-@st.cache_data(ttl=300)
+@_cache_data(ttl=300)
 def get_historical_data(symbols, period='1y'):
     """Fetch historical price data for one or more symbols."""
     try:
@@ -33,7 +62,7 @@ def get_historical_data(symbols, period='1y'):
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=300)
+@_cache_data(ttl=300)
 def get_stock_info(symbol):
     """Fetch comprehensive stock information with all fundamental metrics."""
     try:

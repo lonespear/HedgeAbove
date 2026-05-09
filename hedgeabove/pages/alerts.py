@@ -11,7 +11,20 @@ import streamlit as st
 
 from hedgeabove import config, db
 from hedgeabove.rules import technical as tech_rules
+from hedgeabove.rules import fundamental as fund_rules
 from hedgeabove.alerts.telegram import send as send_telegram
+
+
+def _all_rule_types():
+    return sorted(set(tech_rules.REGISTRY) | set(fund_rules.REGISTRY))
+
+
+def _rule_kind(rt):
+    if rt in tech_rules.REGISTRY:
+        return "technical"
+    if rt in fund_rules.REGISTRY:
+        return "fundamental"
+    return "unknown"
 
 
 def _todays_alert_count():
@@ -95,7 +108,8 @@ def _render_group(gid, name):
         for rid, rt, params, enabled in rules:
             r1, r2, r3, r4 = st.columns([4, 1, 1, 1])
             badge = " · `" + params + "`" if params and params != "{}" else ""
-            r1.write(f"**{rt}**{badge}")
+            kind = _rule_kind(rt)
+            r1.write(f"**{rt}** _({kind})_{badge}")
             r2.write("✅ ON" if enabled else "⏸ OFF")
             tog_label = "Disable" if enabled else "Enable"
             if r3.button(tog_label, key=f"tog_{rid}"):
@@ -108,7 +122,7 @@ def _render_group(gid, name):
         st.caption("(no rules — add one below)")
 
     existing_types = {row[1] for row in rules}
-    available = [r for r in tech_rules.available_rules() if r not in existing_types]
+    available = [r for r in _all_rule_types() if r not in existing_types]
     if available:
         ar1, ar2 = st.columns([3, 1])
         new_rule = ar1.selectbox(
