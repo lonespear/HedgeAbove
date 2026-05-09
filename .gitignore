@@ -54,7 +54,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-data/
+/data/
 datasets/
 
 # ML Models
