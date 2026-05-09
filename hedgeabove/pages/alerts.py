@@ -268,6 +268,99 @@ def render():
                 st.error("Symbol cannot be empty.")
 
     st.markdown("---")
+    st.subheader("Rule analytics — does this signal actually work?")
+    st.caption(
+        "Replays a technical rule over historical bars and measures forward returns "
+        "at 5/10/20 day horizons. Use this to tune thresholds and prune signals "
+        "that don't deliver. Fundamental rules aren't supported (no point-in-time data)."
+    )
+    technical_only = sorted(tech_rules.REGISTRY.keys())
+    ra1, ra2, ra3 = st.columns([2, 1, 1])
+    ana_rule = ra1.selectbox("Rule", technical_only, key="ana_rule",
+                             format_func=lambda rt: f"{rt}")
+    ana_symbol = ra2.text_input("Symbol", value="SPY", key="ana_sym")
+    ana_period = ra3.selectbox("Period", ["1y", "2y", "5y", "10y", "max"],
+                               index=2, key="ana_period")
+    ana_params = st.text_input("Optional params (JSON)", value="{}",
+                               key="ana_params",
+                               placeholder='e.g. {"threshold": 25}')
+    if ana_rule:
+        st.caption(_rule_doc(ana_rule))
+    if st.button("Run backtest", type="secondary", key="ana_run"):
+        try:
+            params_dict = json.loads(ana_params or "{}")
+        except json.JSONDecodeError as e:
+            st.error(f"Invalid JSON: {e}")
+        else:
+            from hedgeabove.backtest.signals import (
+                summarize_rule, fires_to_dataframe, DEFAULT_HORIZONS,
+            )
+            with st.spinner(f"Replaying {ana_rule} on {ana_symbol.upper()}..."):
+                summary, fires = summarize_rule(
+                    ana_symbol.upper(), ana_rule, params_dict, ana_period
+                )
+            st.write(f"**{summary['symbol']}** :: `{summary['rule_type']}`  "
+                     f"params={summary['params']}  period={summary['period']}")
+            if summary["n_fires"] == 0:
+                st.warning("Rule never fired in this window. Try a different "
+                           "threshold or longer period.")
+            else:
+                metric_cols = st.columns(len(DEFAULT_HORIZONS) + 1)
+                metric_cols[0].metric("Total fires", summary["n_fires"])
+                for i, h in enumerate(DEFAULT_HORIZONS, start=1):
+                    hr = summary[f"hit_rate_{h}d"]
+                    avg = summary[f"avg_return_{h}d"]
+                    if hr is None:
+                        metric_cols[i].metric(f"{h}d hit rate", "—")
+                    else:
+                        metric_cols[i].metric(
+                            f"{h}d hit rate",
+                            f"{hr:.0%}",
+                            delta=f"avg {avg:+.2%}",
+                        )
+                # Per-horizon detail table
+                # Streamlit's NumberColumn formats raw values, so pre-scale to %.
+                rows = []
+                for h in DEFAULT_HORIZONS:
+                    hr = summary[f"hit_rate_{h}d"]
+                    avg = summary[f"avg_return_{h}d"]
+                    med = summary[f"median_return_{h}d"]
+                    std = summary[f"std_return_{h}d"]
+                    rows.append({
+                        "horizon": f"{h}d",
+                        "fires_w_fwd": summary[f"n_with_fwd_{h}d"],
+                        "hit_rate %": hr * 100 if hr is not None else None,
+                        "avg %": avg * 100 if avg is not None else None,
+                        "median %": med * 100 if med is not None else None,
+                        "std %": std * 100 if std is not None else None,
+                        "sharpe": summary[f"sharpe_{h}d"],
+                    })
+                stats_df = pd.DataFrame(rows)
+                st.dataframe(stats_df, use_container_width=True, hide_index=True,
+                             column_config={
+                                 "hit_rate %": st.column_config.NumberColumn(format="%.1f"),
+                                 "avg %": st.column_config.NumberColumn(format="%+.2f"),
+                                 "median %": st.column_config.NumberColumn(format="%+.2f"),
+                                 "std %": st.column_config.NumberColumn(format="%.2f"),
+                                 "sharpe": st.column_config.NumberColumn(format="%.2f"),
+                             })
+                # Recent fires (pre-scale forward returns to percent)
+                st.markdown("**Last 10 fires:**")
+                fires_df = fires_to_dataframe(fires).tail(10).reset_index(drop=True)
+                for col in [c for c in fires_df.columns if c.startswith("fwd_")]:
+                    fires_df[col] = fires_df[col] * 100
+                fires_df = fires_df.rename(columns={
+                    "fwd_5d": "5d %", "fwd_10d": "10d %", "fwd_20d": "20d %",
+                })
+                st.dataframe(fires_df, use_container_width=True, hide_index=True,
+                             column_config={
+                                 "5d %": st.column_config.NumberColumn(format="%+.2f"),
+                                 "10d %": st.column_config.NumberColumn(format="%+.2f"),
+                                 "20d %": st.column_config.NumberColumn(format="%+.2f"),
+                                 "price": st.column_config.NumberColumn(format="$%.2f"),
+                             })
+
+    st.markdown("---")
     st.subheader("Recent alert history")
     history = db.recent_alerts(50)
     if history:

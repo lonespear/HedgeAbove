@@ -19,6 +19,7 @@ Usage:
     python -m hedgeabove.cli snooze add <SYMBOL> --days N [--reason "text"]
     python -m hedgeabove.cli snooze remove <SYMBOL>
     python -m hedgeabove.cli snooze list
+    python -m hedgeabove.cli analyze <SYMBOL> <rule_type> [--period 5y] [--param k=v ...] [--show-fires]
 """
 import argparse
 import json
@@ -213,6 +214,46 @@ def cmd_rules_available(args):
         print(f"  - {rt:30s} {doc}")
 
 
+def cmd_analyze(args):
+    from hedgeabove.backtest.signals import summarize_rule, DEFAULT_HORIZONS
+    if args.rule_type not in tech_rules.REGISTRY:
+        if args.rule_type in fund_rules.REGISTRY:
+            print("analyze only supports technical rules. Fundamental rules need "
+                  "point-in-time fundamentals (not yet available).", file=sys.stderr)
+        else:
+            print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
+        sys.exit(1)
+    params_dict = dict(args.param) if args.param else {}
+    sym = args.symbol.upper()
+    print(f"\nAnalyzing {sym} :: {args.rule_type}  params={params_dict}  period={args.period}")
+    summary, fires = summarize_rule(sym, args.rule_type, params_dict, args.period)
+    print(f"  Total fires: {summary['n_fires']}")
+    if summary["n_fires"] == 0:
+        print("  Rule never fired in this window. Try a different threshold or longer period.")
+        return
+    print()
+    print(f"  {'horizon':>10s}  {'fires':>6s}  {'hit_rate':>9s}  {'avg':>8s}  {'median':>8s}  {'std':>8s}  {'sharpe':>7s}")
+    for h in DEFAULT_HORIZONS:
+        n_w = summary[f"n_with_fwd_{h}d"]
+        hr = summary[f"hit_rate_{h}d"]
+        avg = summary[f"avg_return_{h}d"]
+        med = summary[f"median_return_{h}d"]
+        std = summary[f"std_return_{h}d"]
+        sh = summary[f"sharpe_{h}d"]
+        if hr is None:
+            print(f"  {h:>9d}d  {n_w:>6d}  (insufficient forward data)")
+            continue
+        sh_str = f"{sh:>7.2f}" if sh is not None else "    -  "
+        print(f"  {h:>9d}d  {n_w:>6d}  {hr:>8.1%}  {avg:>+7.2%}  {med:>+7.2%}  {std:>7.2%}  {sh_str}")
+    if args.show_fires:
+        print("\n  Last 10 fires:")
+        for f in fires[-10:]:
+            r5 = f"{f.fwd_returns.get(5)*100:+6.2f}%" if f.fwd_returns.get(5) is not None else "   -  "
+            r20 = f"{f.fwd_returns.get(20)*100:+6.2f}%" if f.fwd_returns.get(20) is not None else "   -  "
+            print(f"    {f.fire_date.date()}  ${f.price_at_fire:>8.2f}  "
+                  f"5d={r5}  20d={r20}  {f.message}")
+
+
 def cmd_snooze(args):
     db.init_db()
     if args.action == "add":
@@ -272,6 +313,15 @@ def _build_parser():
     sc.add_argument("--ticker", help="Limit scan to one symbol")
     sub.add_parser("rules-available", help="List registered rule types with descriptions")
 
+    pa = sub.add_parser("analyze", help="Backtest a technical rule on a symbol")
+    pa.add_argument("symbol")
+    pa.add_argument("rule_type")
+    pa.add_argument("--period", default="5y", help="yfinance period (e.g. 1y, 5y, max). Default: 5y")
+    pa.add_argument("--param", type=_parse_param, action="append",
+                    help="Override default rule params, e.g. --param threshold=25")
+    pa.add_argument("--show-fires", action="store_true",
+                    help="Also print the last 10 fire events with forward returns")
+
     ps = sub.add_parser("snooze", help="Mute alerts for a ticker")
     pss = ps.add_subparsers(dest="action", required=True)
     ps_add = pss.add_parser("add")
@@ -294,6 +344,7 @@ def main(argv=None):
         "scan-once": cmd_scan_once,
         "rules-available": cmd_rules_available,
         "snooze": cmd_snooze,
+        "analyze": cmd_analyze,
     }[args.cmd](args)
 
 
