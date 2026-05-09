@@ -581,6 +581,46 @@ def cmd_analyze(args):
                 print(f"    {r['regime']:>12s}  {int(r['n']):>5d}  {r['hit_rate']:>8.1%}  "
                       f"{r['avg']:>+8.2%}  {r['median']:>+8.2%}  {r['std']:>7.2%}")
 
+    if args.by_year:
+        import numpy as np
+        import pandas as pd
+        rows = [{"year": f.fire_date.year,
+                 **{f"fwd_{h}d": f.fwd_returns.get(h) for h in DEFAULT_HORIZONS}}
+                for f in fires]
+        ydf = pd.DataFrame(rows)
+        if ydf.empty:
+            return
+        for h in DEFAULT_HORIZONS:
+            col = f"fwd_{h}d"
+            valid = ydf[ydf[col].notna()]
+            if valid.empty:
+                continue
+            print(f"\n  Per-year breakdown ({h}d horizon):")
+            print(f"    {'year':>6s}  {'n':>5s}  {'hit_rate':>9s}  {'avg':>8s}  {'median':>8s}")
+            yearly_hr = {}
+            for year, group in valid.groupby("year"):
+                n = len(group)
+                hr = float((group[col] > 0).mean())
+                avg = float(group[col].mean())
+                med = float(group[col].median())
+                yearly_hr[year] = hr
+                print(f"    {year:>6d}  {n:>5d}  {hr:>8.1%}  {avg:>+7.2%}  {med:>+7.2%}")
+            # Decay check: last year vs prior years' z-score
+            years = sorted(yearly_hr.keys())
+            if len(years) >= 4:
+                last_y = years[-1]
+                prior = [yearly_hr[y] for y in years[:-1]]
+                mean_prior = float(np.mean(prior))
+                std_prior = float(np.std(prior, ddof=1)) if len(prior) > 1 else 0.0
+                z = (yearly_hr[last_y] - mean_prior) / std_prior if std_prior > 0 else 0.0
+                tag = ""
+                if z < -1.5:
+                    tag = "  ⚠ possible alpha decay"
+                elif z > 1.5:
+                    tag = "  ↑ recent surge"
+                print(f"    Decay check: {last_y} hit_rate {yearly_hr[last_y]:.1%} vs "
+                      f"prior mean {mean_prior:.1%} (z={z:+.2f}){tag}")
+
 
 def cmd_snooze(args):
     db.init_db()
@@ -709,6 +749,8 @@ def _build_parser():
                     help="Also print the last 10 fire events with forward returns")
     pa.add_argument("--by-regime", choices=["vix", "yield_curve"],
                     help="Break down forward returns by macro regime (FRED VIXCLS or 2s10s slope)")
+    pa.add_argument("--by-year", action="store_true",
+                    help="Per-year breakdown + decay check (last year vs prior-years z-score)")
     pa.add_argument("--exclude-earnings", type=_parse_earnings_window, default=None,
                     metavar="N_BEFORE,N_AFTER",
                     help="Drop fires within this earnings window (e.g. 5,5 = 5 days before & after).  "
