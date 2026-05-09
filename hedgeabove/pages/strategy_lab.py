@@ -260,6 +260,75 @@ def _render_strategy_backtester():
                          "exit_price": st.column_config.NumberColumn(format="$%.2f"),
                      })
 
+        # ── Tearsheet ──
+        from hedgeabove.backtest.tearsheet import tearsheet
+        ts = tearsheet(eq, bench_eq if not bench_eq.empty else None)
+
+        st.markdown("---")
+        st.markdown("### Tearsheet")
+
+        # Calendar-year returns
+        yr = ts["calendar_year_returns"]
+        if not yr.empty:
+            st.markdown("**Calendar-year returns:**")
+            yr_df = pd.DataFrame({
+                "Year": [d.year for d in yr.index],
+                "Return %": (yr.values * 100).round(2),
+            })
+            st.dataframe(yr_df, use_container_width=False, hide_index=True,
+                         column_config={"Return %": st.column_config.NumberColumn(format="%+.2f")})
+
+        # Monthly returns heatmap (year x month grid)
+        mr = ts["monthly_returns"]
+        if not mr.empty:
+            mr_df = pd.DataFrame({
+                "year": [d.year for d in mr.index],
+                "month": [d.month for d in mr.index],
+                "ret_pct": mr.values * 100,
+            })
+            pivot = mr_df.pivot(index="year", columns="month", values="ret_pct")
+            month_names = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+                           7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
+            pivot = pivot.rename(columns=month_names)
+            st.markdown("**Monthly returns (%):**")
+            try:
+                styled = pivot.style.format("{:+.2f}", na_rep="—") \
+                                    .background_gradient(cmap="RdYlGn", vmin=-5, vmax=5)
+                st.dataframe(styled, use_container_width=True)
+            except Exception:
+                # Fallback if Styler unsupported in this Streamlit version
+                st.dataframe(pivot.round(2), use_container_width=True)
+
+        # Drawdown chart + summary
+        dd = ts["drawdown_series"]
+        if not dd.empty:
+            st.markdown("**Drawdown (% below all-time peak NAV):**")
+            st.area_chart(dd * 100, use_container_width=True)
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Max drawdown", f"{ts['max_drawdown']*100:.2f}%")
+            d2.metric("Bottomed on",
+                      str(ts['max_drawdown_date'].date())
+                      if hasattr(ts['max_drawdown_date'], 'date')
+                      else str(ts['max_drawdown_date']))
+            d3.metric("Longest underwater", f"{ts['longest_drawdown_days']} days")
+
+        # Rolling Sharpe chart + summary
+        rs = ts["rolling_sharpe_252d"].dropna()
+        if not rs.empty:
+            st.markdown("**Rolling 252-day Sharpe:**")
+            st.line_chart(rs, use_container_width=True)
+            rs1, rs2, rs3, rs4 = st.columns(4)
+            rs1.metric("Latest", f"{rs.iloc[-1]:.2f}")
+            rs2.metric("Mean",   f"{rs.mean():.2f}")
+            rs3.metric("Max",    f"{rs.max():.2f}")
+            rs4.metric("Min",    f"{rs.min():.2f}")
+
+        # Beta to benchmark
+        if ts.get("beta") is not None and bm:
+            st.metric(f"Beta to {bm}", f"{ts['beta']:.2f}",
+                      help="OLS slope of strategy daily returns regressed on benchmark daily returns. "
+                           "1.0 = moves with the market; 0 = uncorrelated; negative = inverse.")
+
 
 def render():
     db.init_db()
