@@ -221,7 +221,7 @@ def _render_strategy_backtester():
                                   key="sl_strat_symbols")
         symbols = [s.strip().upper() for s in sym_input.split(",") if s.strip()]
 
-    p1, p2 = st.columns([3, 1])
+    p1, p2, p3 = st.columns([2, 1, 1])
     if mode == "Single rule":
         params_text = p1.text_input("Optional params (JSON)", value="{}",
                                     key="sl_strat_params",
@@ -233,6 +233,14 @@ def _render_strategy_backtester():
         params_text = "{}"
     benchmark = p2.text_input("Benchmark", value="SPY", key="sl_strat_bench",
                               help="Buy-and-hold ticker for comparison. Empty = skip.")
+    max_concurrent = p3.number_input(
+        "Max concurrent",
+        min_value=1, max_value=20, value=1, step=1,
+        key="sl_strat_max_concurrent",
+        help="How many positions can be open at once. 1 = sequential single-position. "
+             "Higher values diversify and typically improve Sharpe at the cost of "
+             "less per-trade compounding.",
+    )
 
     can_run = bool(symbols) and (
         (mode == "Single rule" and rule_type)
@@ -252,7 +260,8 @@ def _render_strategy_backtester():
             with st.spinner(spinner_msg):
                 res = simulate_basket(symbols, rule_type, params,
                                       period=period, hold_days=int(hold_days),
-                                      benchmark=benchmark.strip() or None)
+                                      benchmark=benchmark.strip() or None,
+                                      max_concurrent=int(max_concurrent))
         else:
             rules_list = [(rt, {}) for rt in composite_rules]
             label = f"[{combiner.upper()}: {','.join(composite_rules)}]"
@@ -262,7 +271,8 @@ def _render_strategy_backtester():
             with st.spinner(spinner_msg):
                 res = simulate_basket(symbols, rules=rules_list, combiner=combiner,
                                       period=period, hold_days=int(hold_days),
-                                      benchmark=benchmark.strip() or None)
+                                      benchmark=benchmark.strip() or None,
+                                      max_concurrent=int(max_concurrent))
 
         s = res["summary"]
         if not s.get("n_trades"):

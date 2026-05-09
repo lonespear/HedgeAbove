@@ -1,28 +1,31 @@
 """
 Strategy backtesting: walk fires across a basket and produce an equity curve.
 
-The model is intentionally simple — single-position long-only:
-  1. Replay the rule on each symbol in the basket.
-  2. Sort all fires chronologically.
-  3. Walk through them. If flat, take the next fire as entry. Hold for
-     ``hold_days`` trading days. Exit at the close of bar ``entry_idx +
-     hold_days``. While holding, ignore any other fires.
-  4. After exit, look for the next fire and repeat.
+The model: long-only basket with up to ``max_concurrent`` open positions.
+At each fire date:
+  - Close any positions whose hold period ended on or before today.
+  - For each fresh fire, if we have capacity (open count < max_concurrent),
+    open a position sized at ``1/max_concurrent`` of current NAV. Capital
+    comes from cash; if cash is short the position is sized to available
+    cash (concentrated in cash-tight regimes — caveat below).
+  - Mark to market: NAV = cash + Σ(open positions valued at today's close).
 
-This is the "naive sequential trader" baseline. It maps each fire to a
-real trade with realized P&L on actual historical bars, so total return,
-Sharpe, and max drawdown are all computable. Multi-position / overlap
-strategies are a v2 (max_concurrent > 1 will need pro-rata sizing and
-running-position bookkeeping).
+When ``max_concurrent=1`` the model degenerates to the original sequential
+single-position backtest: fires arriving while in a position are skipped,
+NAV compounds trade-to-trade, equity curve is daily mark-to-market.
 
 Caveats:
 - Costs and slippage = 0. Real world is harder.
 - Cash earns 0%. Easy to extend to a risk-free rate.
-- Fundamental rules persist for ~90 days, so single-position will catch
-  the first crossing into "in-state" and exit hold_days later — the
-  remaining ~70 days of "in-state" are skipped (correct under the
-  single-position model; not the same as the per-day hit-rate stats).
+- When new fires arrive faster than positions close, the basket can grow
+  cash-poor and undersize new entries. Real PMs would defer or rebalance;
+  v1 just clips at available cash.
+- Fundamental rules persist for ~90 days; single-position catches the
+  first in-state day and skips the rest. Multi-position will absorb more
+  of those crossings, possibly into many concurrent positions on the
+  same name across different fire days — interpret accordingly.
 """
+from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
@@ -46,7 +49,8 @@ class Trade:
 
 def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days=20,
                     starting_nav=1.0, benchmark="SPY",
-                    rules=None, combiner="all"):
+                    rules=None, combiner="all",
+                    max_concurrent=1):
     """Run the single-position basket simulator.
 
     Args:
@@ -108,70 +112,19 @@ def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days
     if not all_fires:
         return empty
 
-    # Sequential single-position walk.
-    trades: list = []
-    in_position_until = None
-    for fire_date, sym, entry_price, msg in all_fires:
-        if in_position_until is not None and fire_date < in_position_until:
-            continue
-        df = bars_map[sym]
-        try:
-            idx = df.index.get_loc(fire_date)
-        except (KeyError, TypeError):
-            idx_arr = df.index.get_indexer([fire_date], method="nearest")
-            idx = int(idx_arr[0]) if len(idx_arr) else -1
-        if idx < 0:
-            continue
-        exit_idx = idx + hold_days
-        if exit_idx >= len(df):
-            continue  # not enough future bars to close
-        exit_date = df.index[exit_idx]
-        exit_price = float(df.iloc[exit_idx]["Close"])
-        trades.append(Trade(
-            symbol=sym,
-            entry_date=fire_date,
-            entry_price=entry_price,
-            exit_date=exit_date,
-            exit_price=exit_price,
-            return_pct=exit_price / entry_price - 1.0,
-            holding_days=hold_days,
-            rule_message=msg,
-        ))
-        in_position_until = exit_date
+    # (Trade-walk and daily NAV are now built together by _simulate_daily below.)
 
+    # Strategy now uses a unified daily-loop simulator with cash + open
+    # positions. max_concurrent=1 falls back to the original sequential
+    # single-position behavior (only one trade open at a time, NAV compounds).
+    # max_concurrent>1 enables real concurrent-position bookkeeping.
+    trades = []
+    equity = pd.Series(dtype=float)
+    if all_fires:
+        trades, equity = _simulate_daily(all_fires, bars_map, hold_days,
+                                         starting_nav, max_concurrent)
     if not trades:
         return empty
-
-    # Build a daily-aligned strategy NAV by walking the trades in order.
-    # In a position: mark-to-market on close. In cash: flat at last realized NAV.
-    span_start = trades[0].entry_date
-    span_end = trades[-1].exit_date
-    # Use the union of all bar dates within the span as our trading-day index.
-    all_dates = pd.DatetimeIndex(sorted(
-        set().union(*(set(df.index) for df in bars_map.values()))
-    ))
-    daily_idx = all_dates[(all_dates >= span_start) & (all_dates <= span_end)]
-
-    nav_arr = []
-    realized_nav = starting_nav
-    ti = 0
-    for d in daily_idx:
-        # Advance past trades that have already closed by date d
-        while ti < len(trades) and d > trades[ti].exit_date:
-            realized_nav = realized_nav * (1 + trades[ti].return_pct)
-            ti += 1
-        if ti < len(trades):
-            t = trades[ti]
-            if t.entry_date <= d <= t.exit_date:
-                df = bars_map[t.symbol]
-                if d in df.index:
-                    nav_arr.append(realized_nav * float(df.loc[d, "Close"]) / t.entry_price)
-                else:
-                    nav_arr.append(nav_arr[-1] if nav_arr else realized_nav)
-                continue
-        nav_arr.append(realized_nav)
-
-    equity = pd.Series(nav_arr, index=daily_idx)
 
     returns = np.array([t.return_pct for t in trades], dtype=float)
     win_rate = float((returns > 0).mean())
@@ -236,6 +189,142 @@ def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days
 
     return {"summary": summary, "trades": trades, "equity_curve": equity,
             "benchmark_curve": benchmark_curve}
+
+
+def _close_at(df, exit_date):
+    """Resolve the close price on `exit_date` (exact or nearest)."""
+    try:
+        return float(df.loc[exit_date, "Close"])
+    except KeyError:
+        idx_arr = df.index.get_indexer([exit_date], method="nearest")
+        idx = int(idx_arr[0])
+        return float(df.iloc[idx]["Close"])
+
+
+def _simulate_daily(all_fires, bars_map, hold_days, starting_nav, max_concurrent):
+    """Daily portfolio simulator. Returns (trades_list, daily_nav_series).
+
+    Walks every trading day in the span:
+      1. Close any positions whose exit_date is on or before today.
+      2. Process any fires arriving today, opening positions until either
+         we hit max_concurrent or run out of cash.
+      3. Mark all open positions to today's close; NAV = cash + Σ position values.
+    """
+    # Group fires by their date (pandas Timestamp), preserving fire order
+    # so deterministic basket builds match across runs.
+    fires_by_date = defaultdict(list)
+    for fire_date, sym, price, msg in all_fires:
+        fires_by_date[fire_date].append((sym, price, msg))
+
+    # Build the union daily index spanning from first fire to last possible exit.
+    all_dates = pd.DatetimeIndex(sorted(
+        set().union(*(set(df.index) for df in bars_map.values()))
+    ))
+    span_start = all_fires[0][0]
+    # Last possible exit = last fire's date + hold_days bars on its symbol's calendar
+    last_fire_date, last_fire_sym, _, _ = all_fires[-1]
+    last_df = bars_map[last_fire_sym]
+    try:
+        last_idx = last_df.index.get_loc(last_fire_date)
+    except (KeyError, TypeError):
+        last_idx = int(last_df.index.get_indexer([last_fire_date], method="nearest")[0])
+    last_exit_idx = min(last_idx + hold_days, len(last_df) - 1)
+    span_end = last_df.index[last_exit_idx]
+
+    daily_idx = all_dates[(all_dates >= span_start) & (all_dates <= span_end)]
+
+    cash = float(starting_nav)
+    target_weight = 1.0 / max_concurrent
+    open_positions: list = []  # dicts: {symbol, entry_date, entry_price, exit_date, capital_used, rule_message}
+    closed_trades: list = []
+    nav_vals: list = []
+
+    def _mtm_open(d):
+        """Mark-to-market value of all currently open positions on date d."""
+        total = 0.0
+        for p in open_positions:
+            sym_df = bars_map[p["symbol"]]
+            if d in sym_df.index:
+                px = float(sym_df.loc[d, "Close"])
+            else:
+                idx_arr = sym_df.index.get_indexer([d], method="ffill")
+                if int(idx_arr[0]) < 0:
+                    continue
+                px = float(sym_df.iloc[int(idx_arr[0])]["Close"])
+            total += p["capital_used"] * px / p["entry_price"]
+        return total
+
+    for d in daily_idx:
+        # 1. Close positions whose hold has elapsed.
+        still_open = []
+        for p in open_positions:
+            if d >= p["exit_date"]:
+                exit_price = _close_at(bars_map[p["symbol"]], p["exit_date"])
+                cash += p["capital_used"] * exit_price / p["entry_price"]
+                closed_trades.append(Trade(
+                    symbol=p["symbol"],
+                    entry_date=p["entry_date"],
+                    entry_price=p["entry_price"],
+                    exit_date=p["exit_date"],
+                    exit_price=exit_price,
+                    return_pct=exit_price / p["entry_price"] - 1.0,
+                    holding_days=hold_days,
+                    rule_message=p["rule_message"],
+                ))
+            else:
+                still_open.append(p)
+        open_positions = still_open
+
+        # 2. Process today's fires.
+        for sym, entry_price, msg in fires_by_date.get(d, []):
+            if len(open_positions) >= max_concurrent:
+                break  # at capacity for the rest of the day
+            sym_df = bars_map[sym]
+            try:
+                entry_idx = sym_df.index.get_loc(d)
+            except (KeyError, TypeError):
+                continue
+            exit_idx = entry_idx + hold_days
+            if exit_idx >= len(sym_df):
+                continue  # not enough future bars to close cleanly
+            exit_date = sym_df.index[exit_idx]
+
+            current_nav = cash + _mtm_open(d)
+            capital = min(current_nav * target_weight, cash)
+            if capital <= 0:
+                continue
+            cash -= capital
+            open_positions.append({
+                "symbol": sym,
+                "entry_date": d,
+                "entry_price": entry_price,
+                "exit_date": exit_date,
+                "capital_used": capital,
+                "rule_message": msg,
+            })
+
+        # 3. Daily NAV.
+        nav_vals.append(cash + _mtm_open(d))
+
+    # Anything still open at end of span: close at last available bar.
+    for p in open_positions:
+        sym_df = bars_map[p["symbol"]]
+        last_close = float(sym_df.iloc[-1]["Close"])
+        cash += p["capital_used"] * last_close / p["entry_price"]
+        closed_trades.append(Trade(
+            symbol=p["symbol"],
+            entry_date=p["entry_date"],
+            entry_price=p["entry_price"],
+            exit_date=sym_df.index[-1],
+            exit_price=last_close,
+            return_pct=last_close / p["entry_price"] - 1.0,
+            holding_days=hold_days,
+            rule_message=p["rule_message"],
+        ))
+
+    closed_trades.sort(key=lambda t: t.entry_date)
+    equity = pd.Series(nav_vals, index=daily_idx)
+    return closed_trades, equity
 
 
 def trades_to_dataframe(trades):

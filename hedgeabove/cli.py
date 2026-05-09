@@ -261,16 +261,19 @@ def cmd_strategy(args):
     if rules_list is not None:
         label = f"[{args.combine.upper()}: {','.join(rt for rt, _ in rules_list)}]"
         print(f"\nSimulating composite {label} on {len(symbols)} ticker(s)  "
-              f"period={args.period}  hold={args.hold_days}d")
+              f"period={args.period}  hold={args.hold_days}d  max_concurrent={args.max_concurrent}")
         res = simulate_basket(symbols, rules=rules_list, combiner=args.combine,
                               period=args.period, hold_days=args.hold_days,
-                              benchmark=args.benchmark)
+                              benchmark=args.benchmark,
+                              max_concurrent=args.max_concurrent)
     else:
         print(f"\nSimulating '{args.rule_type}' on {len(symbols)} ticker(s)  "
-              f"period={args.period}  hold={args.hold_days}d  params={params}")
+              f"period={args.period}  hold={args.hold_days}d  params={params}  "
+              f"max_concurrent={args.max_concurrent}")
         res = simulate_basket(symbols, args.rule_type, params,
                               period=args.period, hold_days=args.hold_days,
-                              benchmark=args.benchmark)
+                              benchmark=args.benchmark,
+                              max_concurrent=args.max_concurrent)
     s = res["summary"]
     if not s.get("n_trades"):
         print("No trades — rule never fired (or no future bars to close).")
@@ -650,6 +653,9 @@ def _build_parser():
                      help="Benchmark symbol for buy-and-hold comparison (default SPY)")
     pst.add_argument("--no-benchmark", dest="benchmark", action="store_const", const=None,
                      help="Skip benchmark comparison")
+    pst.add_argument("--max-concurrent", type=int, default=1,
+                     help="Maximum simultaneous open positions (default 1 = single-position).  "
+                          "Each gets 1/max_concurrent of NAV at entry; cash funds new entries.")
     pst.add_argument("--show-trades", action="store_true", help="Print last 15 trades")
     pst.add_argument("--tearsheet", action="store_true",
                      help="Print calendar-year returns, drawdown stats, rolling Sharpe, beta")
