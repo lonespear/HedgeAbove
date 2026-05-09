@@ -270,14 +270,18 @@ def render():
     st.markdown("---")
     st.subheader("Rule analytics — does this signal actually work?")
     st.caption(
-        "Replays a technical rule over historical bars and measures forward returns "
-        "at 5/10/20 day horizons. Use this to tune thresholds and prune signals "
-        "that don't deliver. Fundamental rules aren't supported (no point-in-time data)."
+        "Replays a rule over historical bars and measures forward returns at "
+        "5/10/20 day horizons. Use this to tune thresholds and prune signals "
+        "that don't deliver. Fundamental rules use SEC EDGAR XBRL filings for "
+        "point-in-time data (filing-date filtered, amendments deduped); "
+        "`analyst_upside_above` and `dividend_yield_above` aren't yet backtestable."
     )
-    technical_only = sorted(tech_rules.REGISTRY.keys())
+    # All rule types except those without a free point-in-time source
+    _UNBACKTESTABLE = {"analyst_upside_above", "dividend_yield_above"}
+    backtestable = [r for r in _all_rule_types() if r not in _UNBACKTESTABLE]
     ra1, ra2, ra3 = st.columns([2, 1, 1])
-    ana_rule = ra1.selectbox("Rule", technical_only, key="ana_rule",
-                             format_func=lambda rt: f"{rt}")
+    ana_rule = ra1.selectbox("Rule", backtestable, key="ana_rule",
+                             format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
     ana_symbol = ra2.text_input("Symbol", value="SPY", key="ana_sym")
     ana_period = ra3.selectbox("Period", ["1y", "2y", "5y", "10y", "max"],
                                index=2, key="ana_period")

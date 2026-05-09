@@ -1,13 +1,25 @@
 """
-Signal backtesting: replay technical rules over historical bars and measure
-forward returns. Used by ``cli analyze`` and the Streamlit Rule Analytics UI.
+Signal backtesting: replay rules over historical bars and measure forward
+returns. Used by ``cli analyze`` and the Streamlit Rule Analytics UI.
 
-Limitation: fundamental rules use today's snapshot from ``ticker.info``,
-so backtesting them with current ratios against historical dates would
-inject look-ahead bias. Only technical rules (which depend on point-in-time
-bars + indicators) are supported here. Fundamental backtesting requires
-point-in-time fundamentals — a future enhancement requiring a paid data
-source like Sharadar or alpha-vantage premium.
+**Technical rules** are evaluated against indicator-augmented daily bars; the
+indicator pipeline is point-in-time by construction.
+
+**Fundamental rules** are evaluated against a point-in-time snapshot built
+from SEC EDGAR XBRL via ``hedgeabove.data.edgar.get_fundamentals_as_of``.
+The fundamentals dict has the same shape as the live ``get_stock_info`` so
+the rule code is unchanged. Look-ahead is defeated because EDGAR facts are
+filtered to ``filing_date <= bar_date`` with amendments deduped to the
+earliest filing per period.
+
+Caveats for fundamental rules:
+- ``analyst_upside_above`` can't be backtested (analyst targets aren't filed
+  with the SEC; require Finnhub historical snapshots, future enhancement).
+- ``dividend_yield_above`` not yet wired (TTM dividend extraction is a TODO).
+- Fundamental conditions persist for ~90 days between filings, so the same
+  rule fires every day the condition holds — interpret hit rate as the
+  win rate of being long *while* the condition is true, not as the win rate
+  of statistically-independent trade events.
 """
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
@@ -19,6 +31,7 @@ import yfinance as yf
 from hedgeabove import config
 from hedgeabove.indicators.technical import add_indicators, flatten_columns
 from hedgeabove.rules import technical as tech_rules
+from hedgeabove.rules import fundamental as fund_rules
 
 
 DEFAULT_HORIZONS = (5, 10, 20)
@@ -34,36 +47,49 @@ class FireEvent:
 
 def replay_rule(symbol, rule_type, params=None, period="5y",
                 horizons: Sequence[int] = DEFAULT_HORIZONS):
-    """Replay one technical rule over historical bars for one symbol.
+    """Replay one rule (technical or fundamental) over historical bars for
+    one symbol. Returns a list of FireEvent.
 
-    Returns a list of FireEvent. Each event's `fwd_returns[h]` is the
-    percentage change in close price between the fire bar and the bar `h`
-    trading days later (None if there aren't enough bars yet, e.g. recent fires).
+    For fundamental rules, point-in-time fundamentals are pulled from SEC
+    EDGAR via ``hedgeabove.data.edgar.get_fundamentals_as_of`` at each bar's
+    date — no look-ahead.
     """
-    if rule_type not in tech_rules.REGISTRY:
-        raise ValueError(
-            f"replay_rule only supports technical rules; '{rule_type}' is not technical."
-        )
+    is_technical = rule_type in tech_rules.REGISTRY
+    is_fundamental = rule_type in fund_rules.REGISTRY
+    if not (is_technical or is_fundamental):
+        raise ValueError(f"Unknown rule type: {rule_type!r}")
     params = params or {}
+
     df = yf.download(symbol, period=period, interval="1d",
                      progress=False, auto_adjust=True)
     df = flatten_columns(df)
     if df.empty or len(df) < config.MA_SLOW + 5:
         return []
-    df = add_indicators(df,
-                        rsi_period=config.RSI_PERIOD,
-                        ma_fast=config.MA_FAST,
-                        ma_slow=config.MA_SLOW)
+    if is_technical:
+        df = add_indicators(df,
+                            rsi_period=config.RSI_PERIOD,
+                            ma_fast=config.MA_FAST,
+                            ma_slow=config.MA_SLOW)
+    else:
+        from hedgeabove.data.edgar import get_fundamentals_as_of  # lazy
 
     fires = []
     n = len(df)
     for i in range(1, n):
         latest = df.iloc[i]
         prev = df.iloc[i - 1]
-        msg = tech_rules.evaluate(rule_type, latest, prev, params)
+        price = float(latest["Close"])
+
+        if is_technical:
+            msg = tech_rules.evaluate(rule_type, latest, prev, params)
+        else:
+            bar_dt = df.index[i]
+            bar_date = bar_dt.date() if hasattr(bar_dt, "date") else bar_dt
+            stock_info = get_fundamentals_as_of(symbol, bar_date, current_price=price)
+            msg = fund_rules.evaluate(rule_type, stock_info, params)
+
         if msg is None:
             continue
-        price = float(latest["Close"])
         fwd = {}
         for h in horizons:
             j = i + h

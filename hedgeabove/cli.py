@@ -216,13 +216,14 @@ def cmd_rules_available(args):
 
 def cmd_analyze(args):
     from hedgeabove.backtest.signals import summarize_rule, DEFAULT_HORIZONS
-    if args.rule_type not in tech_rules.REGISTRY:
-        if args.rule_type in fund_rules.REGISTRY:
-            print("analyze only supports technical rules. Fundamental rules need "
-                  "point-in-time fundamentals (not yet available).", file=sys.stderr)
-        else:
-            print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
+    if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
+        print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
         sys.exit(1)
+    if args.rule_type in fund_rules.REGISTRY:
+        if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
+            print(f"'{args.rule_type}' isn't yet backtestable (no point-in-time source for "
+                  f"analyst targets / dividends).", file=sys.stderr)
+            sys.exit(1)
     params_dict = dict(args.param) if args.param else {}
     sym = args.symbol.upper()
     print(f"\nAnalyzing {sym} :: {args.rule_type}  params={params_dict}  period={args.period}")

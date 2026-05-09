@@ -10,3 +10,5 @@ pandas-ta>=0.3.14b
 requests>=2.31.0
 python-dotenv>=1.0.0
 pytz>=2023.3
+# Point-in-time fundamentals for valid backtesting (free SEC EDGAR XBRL)
+edgartools>=5.0
