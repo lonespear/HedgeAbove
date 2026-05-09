@@ -1,9 +1,30 @@
 """Stock ticker universe — S&P 500, Russell 2000, and international ADRs."""
 
-import streamlit as st
+
+def _noop_cache(*args, **kwargs):
+    def deco(fn):
+        return fn
+    return deco
 
 
-@st.cache_data(ttl=3600)
+def _resolve_cache_decorator():
+    """Match data/market.py: real Streamlit cache when running under
+    `streamlit run`, no-op decorator otherwise so the headless scorer /
+    cron / Pi deployments don't pull in Streamlit."""
+    try:
+        import streamlit as st
+        from streamlit.runtime import exists as _runtime_exists
+        if _runtime_exists():
+            return st.cache_data
+    except Exception:
+        pass
+    return _noop_cache
+
+
+_cache_data = _resolve_cache_decorator()
+
+
+@_cache_data(ttl=3600)
 def get_sp500_tickers():
     """Get comprehensive S&P 500 constituents with full sector coverage (~500+ tickers)"""
     return [

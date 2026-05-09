@@ -20,6 +20,8 @@ Usage:
     python -m hedgeabove.cli snooze remove <SYMBOL>
     python -m hedgeabove.cli snooze list
     python -m hedgeabove.cli analyze <SYMBOL> <rule_type> [--period 5y] [--param k=v ...] [--show-fires]
+    python -m hedgeabove.cli score <preset|--weights k=v,...> [--symbols A,B | --universe sp500] [--top N] [--save-as <name>]
+    python -m hedgeabove.cli presets
 """
 import argparse
 import json
@@ -214,6 +216,92 @@ def cmd_rules_available(args):
         print(f"  - {rt:30s} {doc}")
 
 
+def cmd_presets(args):
+    from hedgeabove.scoring.composite import PRESETS, FACTORS
+    print("Available factors:")
+    for name in FACTORS:
+        print(f"  - {name}")
+    print()
+    print("Built-in presets (negative weight = lower-is-better):")
+    for name, w in PRESETS.items():
+        weight_str = ", ".join(f"{k}={v:+.2f}" for k, v in w.items())
+        print(f"  - {name:15s} {{ {weight_str} }}")
+
+
+def cmd_score(args):
+    from hedgeabove.scoring.composite import (
+        score_universe, score_with_preset, PRESETS, FACTORS,
+    )
+    # Resolve weights
+    if args.preset:
+        if args.preset not in PRESETS:
+            print(f"Unknown preset: {args.preset!r}. Available: {list(PRESETS)}",
+                  file=sys.stderr)
+            sys.exit(1)
+        weights = PRESETS[args.preset]
+        label = f"preset '{args.preset}'"
+    elif args.weights:
+        weights = {}
+        for kv in args.weights.split(","):
+            if "=" not in kv:
+                print(f"Bad --weights entry: {kv!r}. Expected k=v.", file=sys.stderr)
+                sys.exit(1)
+            k, v = kv.split("=", 1)
+            weights[k.strip()] = float(v)
+        unknown = set(weights) - set(FACTORS)
+        if unknown:
+            print(f"Unknown factor(s): {sorted(unknown)}. "
+                  f"Available: {list(FACTORS)}", file=sys.stderr)
+            sys.exit(1)
+        label = "custom weights"
+    else:
+        print("Need --preset or --weights k1=v1,k2=v2", file=sys.stderr)
+        sys.exit(1)
+
+    # Resolve universe
+    if args.symbols:
+        symbols = [s.strip().upper() for s in args.symbols.split(",")]
+    elif args.universe == "sp500":
+        from hedgeabove.data.universe import get_sp500_tickers
+        symbols = get_sp500_tickers()
+    else:
+        print("Need --symbols A,B,C or --universe sp500", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Scoring {len(symbols)} ticker(s) on {label}: {weights}")
+    print("(parallel fetch — this can take a while; cold S&P 500 is ~5-10 min)")
+
+    def progress(i, n, sym):
+        if i == n or i % 5 == 0:
+            print(f"  [{i:>4d}/{n}] {sym:8s}", end="\r", flush=True)
+
+    df = score_universe(symbols, weights, progress=progress)
+    print()  # newline after progress
+
+    if df.empty:
+        print("No results — every ticker is missing at least one required factor.")
+        return
+
+    cols_to_show = list(weights.keys()) + ["composite_score"]
+    top = df.head(args.top)[cols_to_show]
+    print(f"\nTop {len(top)} of {len(df)} (eligible after factor-completeness filter):")
+    print(top.to_string(float_format=lambda x: f"{x:>9.4f}"))
+
+    if args.save_as:
+        from hedgeabove import db
+        db.init_db()
+        existing = db.get_watchlist_group_by_name(args.save_as)
+        if existing:
+            gid = existing[0]
+            print(f"\nWatchlist group '{args.save_as}' exists; appending to it.")
+        else:
+            gid = db.create_watchlist_group(args.save_as)
+            print(f"\nCreated watchlist group '{args.save_as}' (id={gid})")
+        for sym in top.index:
+            db.add_ticker_to_group(gid, sym)
+        print(f"Added {len(top)} ticker(s) to '{args.save_as}'.")
+
+
 def cmd_analyze(args):
     from hedgeabove.backtest.signals import summarize_rule, DEFAULT_HORIZONS
     if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
@@ -314,6 +402,18 @@ def _build_parser():
     sc.add_argument("--ticker", help="Limit scan to one symbol")
     sub.add_parser("rules-available", help="List registered rule types with descriptions")
 
+    sub.add_parser("presets", help="List built-in factor presets")
+
+    psc = sub.add_parser("score", help="Cross-sectional rank a universe by weighted Z-scored factors")
+    pscg = psc.add_mutually_exclusive_group(required=True)
+    pscg.add_argument("--preset", help="Use a built-in preset (see `cli presets`)")
+    pscg.add_argument("--weights", help="Custom weights, e.g. roe=0.4,pe=-0.6")
+    psug = psc.add_mutually_exclusive_group(required=True)
+    psug.add_argument("--symbols", help="Comma-separated tickers")
+    psug.add_argument("--universe", choices=["sp500"], help="Built-in universe")
+    psc.add_argument("--top", type=int, default=20, help="Number of top names to show / save")
+    psc.add_argument("--save-as", help="Save the top-N as a watchlist group with this name")
+
     pa = sub.add_parser("analyze", help="Backtest a technical rule on a symbol")
     pa.add_argument("symbol")
     pa.add_argument("rule_type")
@@ -346,6 +446,8 @@ def main(argv=None):
         "rules-available": cmd_rules_available,
         "snooze": cmd_snooze,
         "analyze": cmd_analyze,
+        "score": cmd_score,
+        "presets": cmd_presets,
     }[args.cmd](args)
 
 
