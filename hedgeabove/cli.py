@@ -23,6 +23,7 @@ Usage:
     python -m hedgeabove.cli score <preset|--weights k=v,...> [--symbols A,B | --universe sp500] [--top N] [--save-as <name>]
     python -m hedgeabove.cli presets
     python -m hedgeabove.cli strategy <rule_type> [--symbols A,B | --watchlist <name>] [--period 5y] [--hold-days 20] [--param k=v ...]
+    python -m hedgeabove.cli walk-forward <SYMBOL> <rule_type> --param-name <k> --param-grid v1,v2,v3 [--period 10y] [--horizon 20] [--folds 5] [--score sharpe|hit_rate|avg_return]
 """
 import argparse
 import json
@@ -335,6 +336,66 @@ def cmd_strategy(args):
             print(f"\n  Beta to {bm}: {beta:.2f}")
 
 
+def cmd_walk_forward(args):
+    from hedgeabove.backtest.walkforward import walk_forward_optimize
+    if args.rule_type not in tech_rules.REGISTRY:
+        print(f"walk-forward currently supports only technical rules; got {args.rule_type!r}",
+              file=sys.stderr)
+        sys.exit(1)
+    grid = []
+    for x in args.param_grid.split(","):
+        x = x.strip()
+        if not x:
+            continue
+        try:
+            grid.append(int(x))
+        except ValueError:
+            try:
+                grid.append(float(x))
+            except ValueError:
+                print(f"Invalid grid value: {x!r}", file=sys.stderr)
+                sys.exit(1)
+    if len(grid) < 2:
+        print("--param-grid needs at least 2 values to optimize over.", file=sys.stderr)
+        sys.exit(1)
+
+    sym = args.symbol.upper()
+    print(f"\nWalk-forward {args.rule_type} on {sym}")
+    print(f"  Param: {args.param_name} in {grid}")
+    print(f"  Folds: {args.folds}  Horizon: {args.horizon}d  Period: {args.period}  Score: {args.score_metric}")
+
+    res = walk_forward_optimize(sym, args.rule_type, args.param_name, grid,
+                                period=args.period, horizon=args.horizon,
+                                n_folds=args.folds, score=args.score_metric)
+    if not res:
+        print("Insufficient data for walk-forward (need >= 60 bars per fold).")
+        return
+
+    print()
+    print("  Fold-by-fold (train -> chosen param -> OOS):")
+    print(f"    {'fold':>4s}  {'train start':>11s} {'-> end':>11s}  "
+          f"{'test start':>11s} {'-> end':>11s}  {'best':>6s}  {'OOS score':>9s}  {'OOS n':>6s}")
+    for f in res["fold_records"]:
+        bp = f["best_param"]
+        bp_str = str(bp)
+        oos = f["oos_score"]
+        oos_str = "-inf" if oos == float("-inf") else f"{oos:>9.3f}"
+        print(f"    {f['fold']:>4d}  {str(f['train_start']):>11s} -> {str(f['train_end']):<11s}  "
+              f"{str(f['test_start']):>11s} -> {str(f['test_end']):<11s}  "
+              f"{bp_str:>6s}  {oos_str}  {f['oos_n_fires']:>6d}")
+
+    s = res["walk_forward_summary"]
+    print(f"\n  Aggregate out-of-sample:")
+    print(f"    Total OOS fires: {s.get('n_oos_fires', 0)}")
+    if s.get("n_oos_fires", 0) > 0:
+        print(f"    Hit rate:        {s['oos_hit_rate']:>7.1%}")
+        print(f"    Avg return:      {s['oos_avg_return']:>+7.2%}")
+        print(f"    Median return:   {s['oos_median_return']:>+7.2%}")
+        sh = s.get("oos_sharpe_ann")
+        if sh is not None:
+            print(f"    Sharpe (ann):    {sh:>7.2f}")
+
+
 def cmd_presets(args):
     from hedgeabove.scoring.composite import PRESETS, FACTORS
     print("Available factors:")
@@ -557,6 +618,22 @@ def _build_parser():
 
     sub.add_parser("presets", help="List built-in factor presets")
 
+    pwf = sub.add_parser("walk-forward",
+                         help="Walk-forward parameter optimization (out-of-sample validation)")
+    pwf.add_argument("symbol")
+    pwf.add_argument("rule_type")
+    pwf.add_argument("--param-name", required=True,
+                     help="Rule param to vary (e.g. threshold)")
+    pwf.add_argument("--param-grid", required=True,
+                     help="Comma-separated candidate values, e.g. 20,25,30,35,40")
+    pwf.add_argument("--period", default="10y", help="yfinance period (default 10y)")
+    pwf.add_argument("--horizon", type=int, default=20,
+                     help="Forward-return horizon for scoring + OOS (default 20 days)")
+    pwf.add_argument("--folds", type=int, default=5,
+                     help="Number of time-ordered folds (default 5)")
+    pwf.add_argument("--score-metric", choices=["sharpe", "hit_rate", "avg_return"],
+                     default="sharpe", help="Optimizer objective (default sharpe)")
+
     pst = sub.add_parser("strategy", help="Backtest a single-position long basket strategy (single rule or composite)")
     pst.add_argument("rule_type", nargs="?", help="Single rule (or use --rules)")
     pst.add_argument("--rules", help="Comma-separated rules for composite strategies")
@@ -627,6 +704,7 @@ def main(argv=None):
         "score": cmd_score,
         "presets": cmd_presets,
         "strategy": cmd_strategy,
+        "walk-forward": cmd_walk_forward,
     }[args.cmd](args)
 
 
