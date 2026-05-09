@@ -22,4 +22,4 @@ RSI_OVERSOLD = float(os.getenv("RSI_OVERSOLD", "30"))
 RSI_OVERBOUGHT = float(os.getenv("RSI_OVERBOUGHT", "70"))
 MA_FAST = int(os.getenv("MA_FAST", "50"))
 MA_SLOW = int(os.getenv("MA_SLOW", "200"))
-LOOKBACK = os.getenv("LOOKBACK", "1y")
+LOOKBACK = os.getenv("LOOKBACK", "2y")  # 2y so 252d high/low + 200d SMA both have warm-up

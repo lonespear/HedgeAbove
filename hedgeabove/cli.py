@@ -7,16 +7,20 @@ Usage:
     python -m hedgeabove.cli watchlist add <name>
     python -m hedgeabove.cli watchlist add-ticker <name> <SYMBOL> [<SYMBOL> ...]
     python -m hedgeabove.cli watchlist remove-ticker <name> <SYMBOL>
+    python -m hedgeabove.cli watchlist export <file>
+    python -m hedgeabove.cli watchlist import <file> [--mode merge|replace]
     python -m hedgeabove.cli rule list
-    python -m hedgeabove.cli rule add <group_name> <rule_type>
+    python -m hedgeabove.cli rule add <group_name> <rule_type> [--param k=v ...]
     python -m hedgeabove.cli rule disable <rule_id>
     python -m hedgeabove.cli rule enable <rule_id>
     python -m hedgeabove.cli rule delete <rule_id>
-    python -m hedgeabove.cli scan-once
+    python -m hedgeabove.cli scan-once [--group <name>] [--ticker <SYMBOL>]
     python -m hedgeabove.cli rules-available
 """
 import argparse
+import json
 import sys
+from datetime import datetime
 
 from hedgeabove import db
 from hedgeabove.rules import technical as tech_rules
@@ -25,6 +29,19 @@ from hedgeabove.rules import fundamental as fund_rules
 
 def _all_rule_types():
     return sorted(set(tech_rules.REGISTRY) | set(fund_rules.REGISTRY))
+
+
+def _parse_param(s):
+    """Parse a 'k=v' string. Tries int, float, then leaves as string."""
+    if "=" not in s:
+        raise argparse.ArgumentTypeError(f"--param expects k=v, got '{s}'")
+    k, v = s.split("=", 1)
+    for cast in (int, float):
+        try:
+            return k, cast(v)
+        except ValueError:
+            continue
+    return k, v
 
 
 _DEFAULT_TICKERS = ["AAPL", "NVDA", "TSLA", "SPY", "BTC-USD", "ETH-USD"]
@@ -79,6 +96,64 @@ def cmd_watchlist(args):
         gid = _resolve_group_or_die(args.name)
         db.remove_ticker_from_group(gid, args.symbol.upper())
         print(f"Removed {args.symbol.upper()} from '{args.name}'")
+    elif args.action == "export":
+        groups = db.list_watchlist_groups()
+        payload = {
+            "version": 1,
+            "exported_at": datetime.utcnow().isoformat(),
+            "groups": [
+                {
+                    "name": name,
+                    "tickers": db.get_watchlist_group_tickers(gid),
+                    "rules": [
+                        {
+                            "rule_type": rt,
+                            "params": json.loads(params) if params else {},
+                            "enabled": bool(enabled),
+                        }
+                        for rid, rt, params, enabled in db.list_alert_rules(gid, enabled_only=False)
+                    ],
+                }
+                for gid, name in groups
+            ],
+        }
+        with open(args.file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        n_rules = sum(len(g["rules"]) for g in payload["groups"])
+        n_tickers = sum(len(g["tickers"]) for g in payload["groups"])
+        print(f"Exported {len(payload['groups'])} group(s), {n_tickers} ticker(s), "
+              f"{n_rules} rule(s) -> {args.file}")
+    elif args.action == "import":
+        with open(args.file, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if payload.get("version") != 1:
+            print(f"Unsupported export version: {payload.get('version')}", file=sys.stderr)
+            sys.exit(1)
+        if args.mode == "replace":
+            for gid, _ in db.list_watchlist_groups():
+                db.delete_watchlist_group(gid)
+        n_groups = n_tickers = n_rules = 0
+        for g in payload["groups"]:
+            existing = db.get_watchlist_group_by_name(g["name"])
+            if existing:
+                gid = existing[0]
+            else:
+                gid = db.create_watchlist_group(g["name"])
+                n_groups += 1
+            for sym in g.get("tickers", []):
+                db.add_ticker_to_group(gid, sym.upper())
+                n_tickers += 1
+            existing_types = {row[1] for row in db.list_alert_rules(gid, enabled_only=False)}
+            for r in g.get("rules", []):
+                if r["rule_type"] in existing_types:
+                    continue
+                params_str = json.dumps(r.get("params", {}))
+                rid = db.add_alert_rule(gid, r["rule_type"], params_str)
+                if not r.get("enabled", True):
+                    db.set_alert_rule_enabled(rid, False)
+                n_rules += 1
+        print(f"Imported: +{n_groups} group(s), +{n_tickers} ticker(s), +{n_rules} new rule(s) "
+              f"(mode={args.mode})")
 
 
 def cmd_rule(args):
@@ -102,8 +177,11 @@ def cmd_rule(args):
             print(f"Available: {_all_rule_types()}", file=sys.stderr)
             sys.exit(1)
         gid = _resolve_group_or_die(args.group_name)
-        rid = db.add_alert_rule(gid, args.rule_type)
-        print(f"Added rule '{args.rule_type}' to '{args.group_name}' (id={rid})")
+        params_dict = dict(args.param) if args.param else {}
+        params_str = json.dumps(params_dict)
+        rid = db.add_alert_rule(gid, args.rule_type, params_str)
+        suffix = f" with params {params_dict}" if params_dict else ""
+        print(f"Added rule '{args.rule_type}' to '{args.group_name}' (id={rid}){suffix}")
     elif args.action == "disable":
         db.set_alert_rule_enabled(args.rule_id, False)
         print(f"Disabled rule {args.rule_id}")
@@ -117,7 +195,7 @@ def cmd_rule(args):
 
 def cmd_scan_once(args):
     from hedgeabove.scanner import run
-    run(verbose=True)
+    run(verbose=True, group=args.group, ticker=args.ticker)
 
 
 def cmd_rules_available(args):
@@ -144,17 +222,27 @@ def _build_parser():
     pw_addt.add_argument("name"); pw_addt.add_argument("symbols", nargs="+")
     pw_rm = psw.add_parser("remove-ticker")
     pw_rm.add_argument("name"); pw_rm.add_argument("symbol")
+    pw_exp = psw.add_parser("export", help="Dump all groups, tickers, and rules to JSON")
+    pw_exp.add_argument("file")
+    pw_imp = psw.add_parser("import", help="Load groups/tickers/rules from a JSON file")
+    pw_imp.add_argument("file")
+    pw_imp.add_argument("--mode", choices=["merge", "replace"], default="merge",
+                        help="merge: add to existing (default). replace: wipe all groups first.")
 
     pr = sub.add_parser("rule", help="Manage alert rules")
     psr = pr.add_subparsers(dest="action", required=True)
     psr.add_parser("list")
-    pr_add = psr.add_parser("add")
+    pr_add = psr.add_parser("add", help="Attach a rule to a group, optionally with --param k=v")
     pr_add.add_argument("group_name"); pr_add.add_argument("rule_type")
+    pr_add.add_argument("--param", type=_parse_param, action="append",
+                        help="Override default rule params, e.g. --param threshold=25 (repeat for multiple)")
     pr_dis = psr.add_parser("disable"); pr_dis.add_argument("rule_id", type=int)
     pr_en = psr.add_parser("enable"); pr_en.add_argument("rule_id", type=int)
     pr_del = psr.add_parser("delete"); pr_del.add_argument("rule_id", type=int)
 
-    sub.add_parser("scan-once", help="Run a single scan now")
+    sc = sub.add_parser("scan-once", help="Run a single scan now")
+    sc.add_argument("--group", help="Limit scan to one watchlist group")
+    sc.add_argument("--ticker", help="Limit scan to one symbol")
     sub.add_parser("rules-available", help="List registered rule types")
     return p
 

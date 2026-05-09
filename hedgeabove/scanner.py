@@ -86,8 +86,13 @@ def _scan_ticker(symbol, rules, verbose=False):
     return fired
 
 
-def run(verbose=True):
-    """Run a full scan over all watchlist groups. Returns count of alerts fired."""
+def run(verbose=True, group=None, ticker=None):
+    """Run a full scan. Returns count of alerts fired.
+
+    Args:
+      group: if set, only scan watchlist groups whose name matches.
+      ticker: if set, only scan tickers whose symbol matches (case-insensitive).
+    """
     db.init_db()
     if verbose:
         print(f"\n=== Scan started {datetime.now():%Y-%m-%d %H:%M:%S} ===")
@@ -100,8 +105,19 @@ def run(verbose=True):
                   "Run: python -m hedgeabove.cli init")
         return 0
 
+    if group is not None:
+        groups = [(gid, n) for gid, n in groups if n == group]
+        if not groups:
+            if verbose:
+                print(f"No watchlist group named '{group}'.")
+            return 0
+
+    target = ticker.upper() if ticker else None
+
     for group_id, group_name in groups:
         tickers = db.get_watchlist_group_tickers(group_id)
+        if target is not None:
+            tickers = [t for t in tickers if t == target]
         rules = db.list_alert_rules(group_id, enabled_only=True)
         if not tickers or not rules:
             if verbose:

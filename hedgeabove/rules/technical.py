@@ -102,6 +102,119 @@ def death_cross(latest, prev, params):
     return None
 
 
+# ── Bollinger Band rules ────────────────────────────────────────
+
+def _bb_cols(params):
+    length = int(params.get("length", 20))
+    std = float(params.get("std", 2.0))
+    std_str = f"{std:.1f}"
+    return f"BBL_{length}_{std_str}", f"BBU_{length}_{std_str}", f"BBB_{length}_{std_str}"
+
+
+@rule("bollinger_breakout_up")
+def bollinger_breakout_up(latest, prev, params):
+    bbl, bbu, _ = _bb_cols(params)
+    pu, u = prev.get(bbu), latest.get(bbu)
+    pp, p = prev.get("Close"), latest.get("Close")
+    if None in (pu, u, pp, p):
+        return None
+    if pp <= pu and p > u:
+        return f"BOLLINGER BREAKOUT UP (close ${p:.2f} crossed above upper band ${u:.2f})"
+    return None
+
+
+@rule("bollinger_breakout_down")
+def bollinger_breakout_down(latest, prev, params):
+    bbl, _, _ = _bb_cols(params)
+    pl, l = prev.get(bbl), latest.get(bbl)
+    pp, p = prev.get("Close"), latest.get("Close")
+    if None in (pl, l, pp, p):
+        return None
+    if pp >= pl and p < l:
+        return f"BOLLINGER BREAKOUT DOWN (close ${p:.2f} crossed below lower band ${l:.2f})"
+    return None
+
+
+# ── Volume / range rules ────────────────────────────────────────
+
+@rule("volume_spike")
+def volume_spike(latest, prev, params):
+    multiplier = float(params.get("multiplier", 2.0))
+    period = int(params.get("period", 20))
+    vol = latest.get("Volume")
+    avg = latest.get(f"VOL_MA_{period}")
+    if vol is None or avg is None or avg <= 0:
+        return None
+    ratio = vol / avg
+    if ratio >= multiplier:
+        return f"VOLUME SPIKE ({ratio:.1f}x avg{period})"
+    return None
+
+
+@rule("high_52w_breakout")
+def high_52w_breakout(latest, prev, params):
+    lookback = int(params.get("lookback", 252))
+    col = f"HIGH_{lookback}"
+    h = latest.get(col)
+    p = latest.get("Close")
+    pp = prev.get("Close")
+    ph = prev.get(col)
+    if None in (h, p, pp, ph):
+        return None
+    # Today's close breaks above the prior-{lookback}-day high, and yesterday's didn't
+    if pp <= ph and p > h:
+        return f"52-WEEK HIGH BREAKOUT (close ${p:.2f} > prior {lookback}d high ${h:.2f})"
+    return None
+
+
+@rule("low_52w_breakout")
+def low_52w_breakout(latest, prev, params):
+    lookback = int(params.get("lookback", 252))
+    col = f"LOW_{lookback}"
+    l = latest.get(col)
+    p = latest.get("Close")
+    pp = prev.get("Close")
+    pl = prev.get(col)
+    if None in (l, p, pp, pl):
+        return None
+    if pp >= pl and p < l:
+        return f"52-WEEK LOW BREAKDOWN (close ${p:.2f} < prior {lookback}d low ${l:.2f})"
+    return None
+
+
+# ── Price-target rules ──────────────────────────────────────────
+
+@rule("price_above")
+def price_above(latest, prev, params):
+    target = params.get("target_price")
+    if target is None:
+        return None
+    target = float(target)
+    p = latest.get("Close")
+    pp = prev.get("Close")
+    if p is None or pp is None:
+        return None
+    # Fire on the crossing day, not every day above
+    if pp <= target and p > target:
+        return f"PRICE CROSSED ABOVE ${target:.2f} (close ${p:.2f})"
+    return None
+
+
+@rule("price_below")
+def price_below(latest, prev, params):
+    target = params.get("target_price")
+    if target is None:
+        return None
+    target = float(target)
+    p = latest.get("Close")
+    pp = prev.get("Close")
+    if p is None or pp is None:
+        return None
+    if pp >= target and p < target:
+        return f"PRICE CROSSED BELOW ${target:.2f} (close ${p:.2f})"
+    return None
+
+
 def evaluate(rule_type, latest, prev, params=None):
     """Run one rule. Returns alert message if fired, else None."""
     fn = REGISTRY.get(rule_type)
