@@ -22,6 +22,7 @@ Usage:
     python -m hedgeabove.cli analyze <SYMBOL> <rule_type> [--period 5y] [--param k=v ...] [--show-fires]
     python -m hedgeabove.cli score <preset|--weights k=v,...> [--symbols A,B | --universe sp500] [--top N] [--save-as <name>]
     python -m hedgeabove.cli presets
+    python -m hedgeabove.cli strategy <rule_type> [--symbols A,B | --watchlist <name>] [--period 5y] [--hold-days 20] [--param k=v ...]
 """
 import argparse
 import json
@@ -216,6 +217,62 @@ def cmd_rules_available(args):
         print(f"  - {rt:30s} {doc}")
 
 
+def cmd_strategy(args):
+    from hedgeabove.backtest.strategy import simulate_basket, trades_to_dataframe
+    if args.rule_type not in tech_rules.REGISTRY and args.rule_type not in fund_rules.REGISTRY:
+        print(f"Unknown rule type: {args.rule_type}", file=sys.stderr)
+        sys.exit(1)
+    if args.rule_type in {"analyst_upside_above", "dividend_yield_above"}:
+        print(f"'{args.rule_type}' isn't yet backtestable.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.symbols:
+        symbols = [s.strip().upper() for s in args.symbols.split(",")]
+    elif args.watchlist:
+        g = db.get_watchlist_group_by_name(args.watchlist)
+        if not g:
+            print(f"No watchlist named '{args.watchlist}'.", file=sys.stderr)
+            sys.exit(1)
+        symbols = db.get_watchlist_group_tickers(g[0])
+        if not symbols:
+            print(f"Watchlist '{args.watchlist}' is empty.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print("Need --symbols or --watchlist", file=sys.stderr)
+        sys.exit(1)
+
+    params = dict(args.param) if args.param else {}
+    print(f"\nSimulating '{args.rule_type}' on {len(symbols)} ticker(s)  "
+          f"period={args.period}  hold={args.hold_days}d  params={params}")
+
+    res = simulate_basket(symbols, args.rule_type, params,
+                          period=args.period, hold_days=args.hold_days)
+    s = res["summary"]
+    if not s.get("n_trades"):
+        print("No trades — rule never fired (or no future bars to close).")
+        return
+
+    print(f"\n  Span: {s['span_years']:.1f}y   Trades: {s['n_trades']}   "
+          f"Trades/yr: {s['trades_per_year']:.1f}")
+    print(f"  Win rate:      {s['win_rate']:>7.1%}")
+    print(f"  Avg trade:     {s['avg_trade_return']:>+7.2%}")
+    print(f"  Median trade:  {s['median_trade_return']:>+7.2%}")
+    print(f"  Total return:  {s['total_return']:>+7.1%}")
+    print(f"  Ann return:    {s['ann_return']:>+7.1%}")
+    sh = s.get("sharpe_ann")
+    print(f"  Sharpe (ann):  {sh:>7.2f}" if sh is not None else "  Sharpe (ann):    -  ")
+    print(f"  Max drawdown:  {s['max_drawdown']:>7.1%}")
+
+    if args.show_trades:
+        df = trades_to_dataframe(res["trades"]).tail(15)
+        print("\n  Last 15 trades:")
+        for _, r in df.iterrows():
+            sign = "+" if r.return_pct >= 0 else ""
+            print(f"    {r.entry}  ->  {r.exit}  {r.symbol:6s}  "
+                  f"${r.entry_price:>8.2f} -> ${r.exit_price:>8.2f}  "
+                  f"{sign}{r.return_pct*100:6.2f}%")
+
+
 def cmd_presets(args):
     from hedgeabove.scoring.composite import PRESETS, FACTORS
     print("Available factors:")
@@ -404,6 +461,17 @@ def _build_parser():
 
     sub.add_parser("presets", help="List built-in factor presets")
 
+    pst = sub.add_parser("strategy", help="Backtest a single-position long basket strategy")
+    pst.add_argument("rule_type")
+    pstg = pst.add_mutually_exclusive_group(required=True)
+    pstg.add_argument("--symbols", help="Comma-separated tickers")
+    pstg.add_argument("--watchlist", help="Use this watchlist group's tickers")
+    pst.add_argument("--period", default="5y", help="yfinance period (default 5y)")
+    pst.add_argument("--hold-days", type=int, default=20, help="Trading days to hold each position (default 20)")
+    pst.add_argument("--param", type=_parse_param, action="append",
+                     help="Override default rule params, e.g. --param threshold=25")
+    pst.add_argument("--show-trades", action="store_true", help="Print last 15 trades")
+
     psc = sub.add_parser("score", help="Cross-sectional rank a universe by weighted Z-scored factors")
     pscg = psc.add_mutually_exclusive_group(required=True)
     pscg.add_argument("--preset", help="Use a built-in preset (see `cli presets`)")
@@ -448,6 +516,7 @@ def main(argv=None):
         "analyze": cmd_analyze,
         "score": cmd_score,
         "presets": cmd_presets,
+        "strategy": cmd_strategy,
     }[args.cmd](args)
 
 
