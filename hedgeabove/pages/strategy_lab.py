@@ -158,16 +158,50 @@ def _render_strategy_backtester():
     )
 
     backtestable = _all_backtestable_rules()
-    c1, c2, c3 = st.columns([2, 1, 1])
-    rule_type = c1.selectbox("Rule", backtestable, key="sl_strat_rule",
-                             format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
-    period = c2.selectbox("Period", ["1y", "2y", "5y", "10y", "max"], index=2,
-                          key="sl_strat_period")
-    hold_days = c3.number_input("Hold (days)", min_value=1, max_value=120, value=20,
-                                key="sl_strat_hold")
+    mode = st.radio(
+        "Rule mode",
+        ["Single rule", "Composite (multi-rule AND/OR)"],
+        horizontal=True, key="sl_strat_mode",
+    )
 
-    if rule_type:
-        st.caption(_rule_doc(rule_type))
+    rule_type = None
+    composite_rules: list = []
+    combiner = "all"
+
+    if mode == "Single rule":
+        c1, c2, c3 = st.columns([2, 1, 1])
+        rule_type = c1.selectbox("Rule", backtestable, key="sl_strat_rule",
+                                 format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
+        period = c2.selectbox("Period", ["1y", "2y", "5y", "10y", "max"], index=2,
+                              key="sl_strat_period")
+        hold_days = c3.number_input("Hold (days)", min_value=1, max_value=120, value=20,
+                                    key="sl_strat_hold")
+        if rule_type:
+            st.caption(_rule_doc(rule_type))
+    else:
+        c1, c2 = st.columns([1, 1])
+        composite_rules = c1.multiselect(
+            "Rules to combine", backtestable,
+            default=backtestable[:2] if len(backtestable) >= 2 else backtestable,
+            key="sl_strat_composite_rules",
+            format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})",
+        )
+        combiner = c2.selectbox(
+            "Combiner", ["all", "any", "majority"],
+            key="sl_strat_combiner",
+            help="all=AND (every rule fires), any=OR (any rule fires), majority=>50% fire",
+        )
+        c3, c4 = st.columns([1, 1])
+        period = c3.selectbox("Period", ["1y", "2y", "5y", "10y", "max"], index=2,
+                              key="sl_strat_period")
+        hold_days = c4.number_input("Hold (days)", min_value=1, max_value=120, value=20,
+                                    key="sl_strat_hold")
+        if composite_rules:
+            st.caption("Rules in this composite:")
+            for rt in composite_rules:
+                st.caption(f"  - `{rt}` _({_rule_kind(rt)})_: {_rule_doc(rt)}")
+        else:
+            st.caption("Pick at least one rule above to enable backtest.")
 
     s1, s2 = st.columns([1, 2])
     source = s1.radio("Basket source", ["Watchlist", "Custom symbols"],
@@ -188,23 +222,47 @@ def _render_strategy_backtester():
         symbols = [s.strip().upper() for s in sym_input.split(",") if s.strip()]
 
     p1, p2 = st.columns([3, 1])
-    params_text = p1.text_input("Optional params (JSON)", value="{}",
-                                key="sl_strat_params",
-                                placeholder='e.g. {"threshold": 25}')
+    if mode == "Single rule":
+        params_text = p1.text_input("Optional params (JSON)", value="{}",
+                                    key="sl_strat_params",
+                                    placeholder='e.g. {"threshold": 25}')
+    else:
+        p1.caption("Composite mode uses each rule's default params. "
+                   "For per-rule overrides, use the CLI: "
+                   "`hedgeabove.cli strategy --rules ... --combine ...`")
+        params_text = "{}"
     benchmark = p2.text_input("Benchmark", value="SPY", key="sl_strat_bench",
                               help="Buy-and-hold ticker for comparison. Empty = skip.")
 
-    if st.button("Run backtest", type="primary", key="sl_strat_run", disabled=not symbols):
+    can_run = bool(symbols) and (
+        (mode == "Single rule" and rule_type)
+        or (mode != "Single rule" and len(composite_rules) >= 1)
+    )
+
+    if st.button("Run backtest", type="primary", key="sl_strat_run", disabled=not can_run):
         try:
             params = json.loads(params_text or "{}")
         except json.JSONDecodeError as e:
             st.error(f"Invalid JSON: {e}")
             return
 
-        with st.spinner(f"Replaying {rule_type} on {len(symbols)} ticker(s)..."):
-            res = simulate_basket(symbols, rule_type, params,
-                                  period=period, hold_days=int(hold_days),
-                                  benchmark=benchmark.strip() or None)
+        if mode == "Single rule":
+            label = rule_type
+            spinner_msg = f"Replaying {rule_type} on {len(symbols)} ticker(s)..."
+            with st.spinner(spinner_msg):
+                res = simulate_basket(symbols, rule_type, params,
+                                      period=period, hold_days=int(hold_days),
+                                      benchmark=benchmark.strip() or None)
+        else:
+            rules_list = [(rt, {}) for rt in composite_rules]
+            label = f"[{combiner.upper()}: {','.join(composite_rules)}]"
+            spinner_msg = (f"Replaying composite ({combiner.upper()}) of "
+                           f"{len(composite_rules)} rule(s) on "
+                           f"{len(symbols)} ticker(s)...")
+            with st.spinner(spinner_msg):
+                res = simulate_basket(symbols, rules=rules_list, combiner=combiner,
+                                      period=period, hold_days=int(hold_days),
+                                      benchmark=benchmark.strip() or None)
 
         s = res["summary"]
         if not s.get("n_trades"):
