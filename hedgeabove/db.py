@@ -48,6 +48,39 @@ def init_db():
             added_at  TEXT    NOT NULL,
             notes     TEXT
         );
+
+        -- Scanner: named watchlist groups, alert rules, and a one-fire-per-day
+        -- dedup log. Keeps headless cron and Streamlit UI sharing the same DB.
+        CREATE TABLE IF NOT EXISTS watchlist_groups (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL UNIQUE,
+            created_at  TEXT    NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS watchlist_group_tickers (
+            group_id  INTEGER NOT NULL REFERENCES watchlist_groups(id) ON DELETE CASCADE,
+            symbol    TEXT    NOT NULL,
+            PRIMARY KEY (group_id, symbol)
+        );
+
+        CREATE TABLE IF NOT EXISTS alert_rules (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id     INTEGER NOT NULL REFERENCES watchlist_groups(id) ON DELETE CASCADE,
+            rule_type    TEXT    NOT NULL,
+            params_json  TEXT    NOT NULL DEFAULT '{}',
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT    NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS alerts_fired (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol      TEXT    NOT NULL,
+            rule_type   TEXT    NOT NULL,
+            fired_date  TEXT    NOT NULL,
+            fired_at    TEXT    NOT NULL,
+            message     TEXT    NOT NULL,
+            UNIQUE(symbol, rule_type, fired_date)
+        );
     """)
     conn.commit()
     conn.close()
@@ -188,6 +221,166 @@ def get_watchlist():
     conn = _get_conn()
     rows = conn.execute(
         "SELECT symbol, notes, added_at FROM watchlist ORDER BY added_at DESC"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+# ── Watchlist groups (scanner) ──────────────────────────────────
+
+def create_watchlist_group(name):
+    now = datetime.utcnow().isoformat()
+    conn = _get_conn()
+    cur = conn.execute(
+        "INSERT INTO watchlist_groups (name, created_at) VALUES (?, ?)",
+        (name, now),
+    )
+    gid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return gid
+
+
+def get_watchlist_group_by_name(name):
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT id, name FROM watchlist_groups WHERE name = ?", (name,)
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def list_watchlist_groups():
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT id, name FROM watchlist_groups ORDER BY name"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def delete_watchlist_group(group_id):
+    conn = _get_conn()
+    conn.execute("DELETE FROM watchlist_groups WHERE id = ?", (group_id,))
+    conn.commit()
+    conn.close()
+
+
+def add_ticker_to_group(group_id, symbol):
+    conn = _get_conn()
+    conn.execute(
+        "INSERT OR IGNORE INTO watchlist_group_tickers (group_id, symbol) VALUES (?, ?)",
+        (group_id, symbol),
+    )
+    conn.commit()
+    conn.close()
+
+
+def remove_ticker_from_group(group_id, symbol):
+    conn = _get_conn()
+    conn.execute(
+        "DELETE FROM watchlist_group_tickers WHERE group_id = ? AND symbol = ?",
+        (group_id, symbol),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_watchlist_group_tickers(group_id):
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT symbol FROM watchlist_group_tickers WHERE group_id = ? ORDER BY symbol",
+        (group_id,),
+    ).fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+
+# ── Alert rules ─────────────────────────────────────────────────
+
+def add_alert_rule(group_id, rule_type, params_json='{}'):
+    now = datetime.utcnow().isoformat()
+    conn = _get_conn()
+    cur = conn.execute(
+        "INSERT INTO alert_rules (group_id, rule_type, params_json, enabled, created_at) "
+        "VALUES (?, ?, ?, 1, ?)",
+        (group_id, rule_type, params_json, now),
+    )
+    rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def list_alert_rules(group_id, enabled_only=True):
+    conn = _get_conn()
+    if enabled_only:
+        rows = conn.execute(
+            "SELECT id, rule_type, params_json FROM alert_rules "
+            "WHERE group_id = ? AND enabled = 1 ORDER BY id",
+            (group_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, rule_type, params_json, enabled FROM alert_rules "
+            "WHERE group_id = ? ORDER BY id",
+            (group_id,),
+        ).fetchall()
+    conn.close()
+    return rows
+
+
+def set_alert_rule_enabled(rule_id, enabled):
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE alert_rules SET enabled = ? WHERE id = ?",
+        (1 if enabled else 0, rule_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_alert_rule(rule_id):
+    conn = _get_conn()
+    conn.execute("DELETE FROM alert_rules WHERE id = ?", (rule_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Alert dedup / history ───────────────────────────────────────
+
+def alert_fired_today(symbol, rule_type):
+    """True if (symbol, rule_type) already fired an alert today (UTC date)."""
+    today = str(datetime.utcnow().date())
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT 1 FROM alerts_fired WHERE symbol = ? AND rule_type = ? AND fired_date = ?",
+        (symbol, rule_type, today),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def log_alert(symbol, rule_type, message):
+    """Record that an alert fired. Idempotent per (symbol, rule_type, day)."""
+    now = datetime.utcnow().isoformat()
+    today = str(datetime.utcnow().date())
+    conn = _get_conn()
+    conn.execute(
+        "INSERT OR IGNORE INTO alerts_fired (symbol, rule_type, fired_date, fired_at, message) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (symbol, rule_type, today, now, message),
+    )
+    conn.commit()
+    conn.close()
+
+
+def recent_alerts(limit=50):
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT symbol, rule_type, fired_at, message FROM alerts_fired "
+        "ORDER BY fired_at DESC LIMIT ?",
+        (limit,),
     ).fetchall()
     conn.close()
     return rows

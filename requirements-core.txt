@@ -1,0 +1,12 @@
+# HedgeAbove core dependencies — lean install for headless deployments
+# (Raspberry Pi cron jobs, scan.py runs). Used directly:
+#     pip install -r requirements-core.txt
+# Or transitively from requirements.txt for the full Streamlit app.
+
+pandas>=2.0.0
+numpy>=1.24.0
+yfinance>=0.2.36
+pandas-ta>=0.3.14b
+requests>=2.31.0
+python-dotenv>=1.0.0
+pytz>=2023.3

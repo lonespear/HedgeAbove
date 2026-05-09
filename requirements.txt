@@ -1,20 +1,19 @@
-# HedgeAbove - Python Dependencies
+# HedgeAbove - Python Dependencies (full Streamlit app)
 # Install with: pip install -r requirements.txt
+# Headless / Pi deployments: use requirements-core.txt instead.
+
+# Lean core (yfinance, pandas-ta, requests, python-dotenv, ...)
+-r requirements-core.txt
 
 # Core Framework
 streamlit>=1.31.0
-
-# Data Processing
-pandas>=2.0.0
-numpy>=1.24.0
 
 # Visualization
 plotly>=5.18.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
 
-# Market Data
-yfinance>=0.2.35
+# Market Data (extras beyond yfinance)
 pandas-datareader>=0.10.0
 alpha_vantage>=2.3.1
 
@@ -40,11 +39,6 @@ psycopg2-binary>=2.9.9  # PostgreSQL adapter
 
 # Authentication (Optional - for freemium)
 streamlit-authenticator>=0.2.3
-
-# Utilities
-python-dotenv>=1.0.0  # For environment variables
-requests>=2.31.0
-pytz>=2023.3
 
 # Development Tools (Optional)
 pytest>=7.4.0
