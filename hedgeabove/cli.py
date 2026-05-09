@@ -246,7 +246,8 @@ def cmd_strategy(args):
           f"period={args.period}  hold={args.hold_days}d  params={params}")
 
     res = simulate_basket(symbols, args.rule_type, params,
-                          period=args.period, hold_days=args.hold_days)
+                          period=args.period, hold_days=args.hold_days,
+                          benchmark=args.benchmark)
     s = res["summary"]
     if not s.get("n_trades"):
         print("No trades — rule never fired (or no future bars to close).")
@@ -262,6 +263,15 @@ def cmd_strategy(args):
     sh = s.get("sharpe_ann")
     print(f"  Sharpe (ann):  {sh:>7.2f}" if sh is not None else "  Sharpe (ann):    -  ")
     print(f"  Max drawdown:  {s['max_drawdown']:>7.1%}")
+
+    bm = s.get("benchmark")
+    if bm:
+        print(f"\n  Benchmark ({bm}, buy-and-hold over same span):")
+        print(f"    Total return:  {s['benchmark_total_return']:>+7.1%}")
+        print(f"    Ann return:    {s['benchmark_ann_return']:>+7.1%}")
+        print(f"    Max drawdown:  {s['benchmark_max_drawdown']:>7.1%}")
+        print(f"    Alpha (total): {s['alpha_total']:>+7.1%}")
+        print(f"    Alpha (ann):   {s['alpha_ann']:>+7.1%}")
 
     if args.show_trades:
         df = trades_to_dataframe(res["trades"]).tail(15)
@@ -487,6 +497,10 @@ def _build_parser():
     pst.add_argument("--hold-days", type=int, default=20, help="Trading days to hold each position (default 20)")
     pst.add_argument("--param", type=_parse_param, action="append",
                      help="Override default rule params, e.g. --param threshold=25")
+    pst.add_argument("--benchmark", default="SPY",
+                     help="Benchmark symbol for buy-and-hold comparison (default SPY)")
+    pst.add_argument("--no-benchmark", dest="benchmark", action="store_const", const=None,
+                     help="Skip benchmark comparison")
     pst.add_argument("--show-trades", action="store_true", help="Print last 15 trades")
 
     psc = sub.add_parser("score", help="Cross-sectional rank a universe by weighted Z-scored factors")

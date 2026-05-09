@@ -187,9 +187,12 @@ def _render_strategy_backtester():
                                   key="sl_strat_symbols")
         symbols = [s.strip().upper() for s in sym_input.split(",") if s.strip()]
 
-    params_text = st.text_input("Optional params (JSON)", value="{}",
+    p1, p2 = st.columns([3, 1])
+    params_text = p1.text_input("Optional params (JSON)", value="{}",
                                 key="sl_strat_params",
                                 placeholder='e.g. {"threshold": 25}')
+    benchmark = p2.text_input("Benchmark", value="SPY", key="sl_strat_bench",
+                              help="Buy-and-hold ticker for comparison. Empty = skip.")
 
     if st.button("Run backtest", type="primary", key="sl_strat_run", disabled=not symbols):
         try:
@@ -200,7 +203,8 @@ def _render_strategy_backtester():
 
         with st.spinner(f"Replaying {rule_type} on {len(symbols)} ticker(s)..."):
             res = simulate_basket(symbols, rule_type, params,
-                                  period=period, hold_days=int(hold_days))
+                                  period=period, hold_days=int(hold_days),
+                                  benchmark=benchmark.strip() or None)
 
         s = res["summary"]
         if not s.get("n_trades"):
@@ -222,10 +226,26 @@ def _render_strategy_backtester():
         sub_cols[2].metric("Median trade", f"{s['median_trade_return']*100:+.2f}%")
         sub_cols[3].metric("Trades / yr", f"{s['trades_per_year']:.1f}")
 
-        # Equity curve
+        # Benchmark comparison row
+        bm = s.get("benchmark")
+        if bm and s.get("benchmark_total_return") is not None:
+            st.markdown(f"**vs benchmark `{bm}` buy-and-hold:**")
+            b1, b2, b3, b4, b5 = st.columns(5)
+            b1.metric(f"{bm} total", f"{s['benchmark_total_return']*100:+.1f}%")
+            b2.metric(f"{bm} ann", f"{s['benchmark_ann_return']*100:+.1f}%")
+            b3.metric(f"{bm} max DD", f"{s['benchmark_max_drawdown']*100:.1f}%")
+            b4.metric("Alpha (total)", f"{s['alpha_total']*100:+.1f}%")
+            b5.metric("Alpha (ann)", f"{s['alpha_ann']*100:+.1f}%")
+
+        # Equity curve with benchmark overlay
         eq = res["equity_curve"]
-        st.markdown("**Equity curve** (NAV at each trade exit, starts at 1.0):")
-        st.line_chart(eq, use_container_width=True)
+        bench_eq = res.get("benchmark_curve", pd.Series(dtype=float))
+        st.markdown("**Equity curve** (daily mark-to-market in trade, flat in cash):")
+        if not bench_eq.empty:
+            chart_df = pd.DataFrame({"strategy": eq, bm or "benchmark": bench_eq})
+            st.line_chart(chart_df, use_container_width=True)
+        else:
+            st.line_chart(eq, use_container_width=True)
 
         # Trades table
         st.markdown("**Trades:**")

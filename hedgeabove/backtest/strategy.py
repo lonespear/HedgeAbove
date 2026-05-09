@@ -45,7 +45,7 @@ class Trade:
 
 
 def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
-                    starting_nav=1.0):
+                    starting_nav=1.0, benchmark="SPY"):
     """Run the single-position basket simulator.
 
     Args:
@@ -55,13 +55,20 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
       period: yfinance period string ("1y", "5y", "max", ...)
       hold_days: number of trading days to hold each position
       starting_nav: initial portfolio value (default 1.0)
+      benchmark: ticker for buy-and-hold comparison (default SPY).
+        Pass ``None`` to skip benchmark calculation.
 
     Returns dict with:
       summary: dict of n_trades, win_rate, avg/median trade return,
                total_return, ann_return, sharpe_ann, max_drawdown,
-               trades_per_year, span_years
+               trades_per_year, span_years, plus (when benchmark set)
+               benchmark, benchmark_total_return, benchmark_ann_return,
+               benchmark_max_drawdown, alpha_total, alpha_ann.
       trades: list[Trade]
-      equity_curve: pd.Series indexed by trade exit dates (step-function NAV)
+      equity_curve: pd.Series of daily NAV (mark-to-market in trade,
+                    flat in cash) over the strategy span.
+      benchmark_curve: pd.Series of daily benchmark NAV over the same
+                       span (same starting_nav). Empty if benchmark=None.
     """
     from hedgeabove.backtest.signals import replay_rule
 
@@ -88,7 +95,8 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
     all_fires.sort(key=lambda x: x[0])
 
     empty = {"summary": {"n_trades": 0}, "trades": [],
-             "equity_curve": pd.Series(dtype=float)}
+             "equity_curve": pd.Series(dtype=float),
+             "benchmark_curve": pd.Series(dtype=float)}
     if not all_fires:
         return empty
 
@@ -126,13 +134,36 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
     if not trades:
         return empty
 
-    # Equity curve: NAV jumps at each exit. Step-function.
-    nav = starting_nav
-    points = [(trades[0].entry_date, nav)]
-    for t in trades:
-        nav = nav * (1 + t.return_pct)
-        points.append((t.exit_date, nav))
-    equity = pd.Series([p[1] for p in points], index=pd.DatetimeIndex([p[0] for p in points]))
+    # Build a daily-aligned strategy NAV by walking the trades in order.
+    # In a position: mark-to-market on close. In cash: flat at last realized NAV.
+    span_start = trades[0].entry_date
+    span_end = trades[-1].exit_date
+    # Use the union of all bar dates within the span as our trading-day index.
+    all_dates = pd.DatetimeIndex(sorted(
+        set().union(*(set(df.index) for df in bars_map.values()))
+    ))
+    daily_idx = all_dates[(all_dates >= span_start) & (all_dates <= span_end)]
+
+    nav_arr = []
+    realized_nav = starting_nav
+    ti = 0
+    for d in daily_idx:
+        # Advance past trades that have already closed by date d
+        while ti < len(trades) and d > trades[ti].exit_date:
+            realized_nav = realized_nav * (1 + trades[ti].return_pct)
+            ti += 1
+        if ti < len(trades):
+            t = trades[ti]
+            if t.entry_date <= d <= t.exit_date:
+                df = bars_map[t.symbol]
+                if d in df.index:
+                    nav_arr.append(realized_nav * float(df.loc[d, "Close"]) / t.entry_price)
+                else:
+                    nav_arr.append(nav_arr[-1] if nav_arr else realized_nav)
+                continue
+        nav_arr.append(realized_nav)
+
+    equity = pd.Series(nav_arr, index=daily_idx)
 
     returns = np.array([t.return_pct for t in trades], dtype=float)
     win_rate = float((returns > 0).mean())
@@ -142,8 +173,9 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
 
     span_days = (trades[-1].exit_date - trades[0].entry_date).days
     span_years = max(span_days / 365.25, 1e-9)
-    total_return = float(nav / starting_nav - 1)
-    ann_return = float((nav / starting_nav) ** (1.0 / span_years) - 1) if span_years > 0 else 0.0
+    final_nav = float(equity.iloc[-1]) if len(equity) else starting_nav
+    total_return = float(final_nav / starting_nav - 1)
+    ann_return = float((final_nav / starting_nav) ** (1.0 / span_years) - 1) if span_years > 0 else 0.0
     trades_per_year = len(trades) / span_years
     sharpe_per_trade = (avg_return / std_return) if std_return > 0 else None
     sharpe_ann = (sharpe_per_trade * np.sqrt(trades_per_year)
@@ -167,7 +199,35 @@ def simulate_basket(symbols, rule_type, params=None, period="5y", hold_days=20,
         "sharpe_ann": sharpe_ann,
         "max_drawdown": max_dd,
     }
-    return {"summary": summary, "trades": trades, "equity_curve": equity}
+
+    # Benchmark: buy-and-hold over the same span, normalized to starting_nav.
+    benchmark_curve = pd.Series(dtype=float)
+    if benchmark and len(daily_idx):
+        try:
+            bdf = yf.download(benchmark, period=period, interval="1d",
+                              progress=False, auto_adjust=True)
+            bdf = flatten_columns(bdf)
+        except Exception:
+            bdf = pd.DataFrame()
+        if not bdf.empty:
+            close = bdf["Close"].reindex(daily_idx, method="ffill")
+            close = close.dropna()
+            if len(close) > 1:
+                bench_norm = close / float(close.iloc[0]) * starting_nav
+                benchmark_curve = bench_norm
+                bench_total = float(bench_norm.iloc[-1] / starting_nav - 1)
+                bench_ann = float((bench_norm.iloc[-1] / starting_nav) ** (1.0 / span_years) - 1) \
+                    if span_years > 0 else 0.0
+                bench_dd = float((bench_norm / bench_norm.cummax() - 1).min())
+                summary["benchmark"] = benchmark
+                summary["benchmark_total_return"] = bench_total
+                summary["benchmark_ann_return"] = bench_ann
+                summary["benchmark_max_drawdown"] = bench_dd
+                summary["alpha_total"] = total_return - bench_total
+                summary["alpha_ann"] = ann_return - bench_ann
+
+    return {"summary": summary, "trades": trades, "equity_curve": equity,
+            "benchmark_curve": benchmark_curve}
 
 
 def trades_to_dataframe(trades):
