@@ -22,6 +22,7 @@ def rule(key):
 
 @rule("rsi_oversold")
 def rsi_oversold(latest, prev, params):
+    """Fires when RSI is below threshold. Params: threshold (default 30), period (default 14)."""
     threshold = params.get("threshold", config.RSI_OVERSOLD)
     period = params.get("period", config.RSI_PERIOD)
     rsi = latest.get(f"RSI_{period}")
@@ -32,6 +33,7 @@ def rsi_oversold(latest, prev, params):
 
 @rule("rsi_overbought")
 def rsi_overbought(latest, prev, params):
+    """Fires when RSI is above threshold. Params: threshold (default 70), period (default 14)."""
     threshold = params.get("threshold", config.RSI_OVERBOUGHT)
     period = params.get("period", config.RSI_PERIOD)
     rsi = latest.get(f"RSI_{period}")
@@ -51,6 +53,7 @@ def _macd_pair(latest, prev):
 
 @rule("macd_bullish_cross")
 def macd_bullish_cross(latest, prev, params):
+    """Fires when MACD line crosses above signal line. No params."""
     macd, sig, pmacd, psig = _macd_pair(latest, prev)
     if None in (macd, sig, pmacd, psig):
         return None
@@ -61,6 +64,7 @@ def macd_bullish_cross(latest, prev, params):
 
 @rule("macd_bearish_cross")
 def macd_bearish_cross(latest, prev, params):
+    """Fires when MACD line crosses below signal line. No params."""
     macd, sig, pmacd, psig = _macd_pair(latest, prev)
     if None in (macd, sig, pmacd, psig):
         return None
@@ -80,6 +84,7 @@ def _ma_pair(latest, prev, fast, slow):
 
 @rule("golden_cross")
 def golden_cross(latest, prev, params):
+    """Fires when fast SMA crosses above slow SMA. Params: ma_fast (default 50), ma_slow (default 200)."""
     fast = params.get("ma_fast", config.MA_FAST)
     slow = params.get("ma_slow", config.MA_SLOW)
     f, s, pf, ps = _ma_pair(latest, prev, fast, slow)
@@ -92,6 +97,7 @@ def golden_cross(latest, prev, params):
 
 @rule("death_cross")
 def death_cross(latest, prev, params):
+    """Fires when fast SMA crosses below slow SMA. Params: ma_fast (default 50), ma_slow (default 200)."""
     fast = params.get("ma_fast", config.MA_FAST)
     slow = params.get("ma_slow", config.MA_SLOW)
     f, s, pf, ps = _ma_pair(latest, prev, fast, slow)
@@ -113,6 +119,7 @@ def _bb_cols(params):
 
 @rule("bollinger_breakout_up")
 def bollinger_breakout_up(latest, prev, params):
+    """Fires when close crosses above the upper Bollinger band. Params: length (20), std (2.0)."""
     bbl, bbu, _ = _bb_cols(params)
     pu, u = prev.get(bbu), latest.get(bbu)
     pp, p = prev.get("Close"), latest.get("Close")
@@ -125,6 +132,7 @@ def bollinger_breakout_up(latest, prev, params):
 
 @rule("bollinger_breakout_down")
 def bollinger_breakout_down(latest, prev, params):
+    """Fires when close crosses below the lower Bollinger band. Params: length (20), std (2.0)."""
     bbl, _, _ = _bb_cols(params)
     pl, l = prev.get(bbl), latest.get(bbl)
     pp, p = prev.get("Close"), latest.get("Close")
@@ -139,6 +147,7 @@ def bollinger_breakout_down(latest, prev, params):
 
 @rule("volume_spike")
 def volume_spike(latest, prev, params):
+    """Fires when today's volume >= multiplier x avg(volume). Params: multiplier (2.0), period (20)."""
     multiplier = float(params.get("multiplier", 2.0))
     period = int(params.get("period", 20))
     vol = latest.get("Volume")
@@ -153,6 +162,7 @@ def volume_spike(latest, prev, params):
 
 @rule("high_52w_breakout")
 def high_52w_breakout(latest, prev, params):
+    """Fires when close crosses above prior N-day high. Params: lookback (252)."""
     lookback = int(params.get("lookback", 252))
     col = f"HIGH_{lookback}"
     h = latest.get(col)
@@ -169,6 +179,7 @@ def high_52w_breakout(latest, prev, params):
 
 @rule("low_52w_breakout")
 def low_52w_breakout(latest, prev, params):
+    """Fires when close crosses below prior N-day low. Params: lookback (252)."""
     lookback = int(params.get("lookback", 252))
     col = f"LOW_{lookback}"
     l = latest.get(col)
@@ -186,6 +197,7 @@ def low_52w_breakout(latest, prev, params):
 
 @rule("price_above")
 def price_above(latest, prev, params):
+    """Fires the day close crosses above target_price. REQUIRED param: target_price (float)."""
     target = params.get("target_price")
     if target is None:
         return None
@@ -202,6 +214,7 @@ def price_above(latest, prev, params):
 
 @rule("price_below")
 def price_below(latest, prev, params):
+    """Fires the day close crosses below target_price. REQUIRED param: target_price (float)."""
     target = params.get("target_price")
     if target is None:
         return None
@@ -225,3 +238,11 @@ def evaluate(rule_type, latest, prev, params=None):
 
 def available_rules():
     return sorted(REGISTRY.keys())
+
+
+def get_doc(rule_type):
+    """Return the rule's docstring (first line) — used for UI hints + CLI help."""
+    fn = REGISTRY.get(rule_type)
+    if fn is None or not fn.__doc__:
+        return ""
+    return fn.__doc__.strip().split("\n", 1)[0]

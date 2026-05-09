@@ -16,11 +16,14 @@ Usage:
     python -m hedgeabove.cli rule delete <rule_id>
     python -m hedgeabove.cli scan-once [--group <name>] [--ticker <SYMBOL>]
     python -m hedgeabove.cli rules-available
+    python -m hedgeabove.cli snooze add <SYMBOL> --days N [--reason "text"]
+    python -m hedgeabove.cli snooze remove <SYMBOL>
+    python -m hedgeabove.cli snooze list
 """
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from hedgeabove import db
 from hedgeabove.rules import technical as tech_rules
@@ -201,11 +204,35 @@ def cmd_scan_once(args):
 def cmd_rules_available(args):
     print("Technical rules (need price history):")
     for rt in tech_rules.available_rules():
-        print(f"  - {rt}")
+        doc = tech_rules.get_doc(rt)
+        print(f"  - {rt:30s} {doc}")
     print()
     print("Fundamental rules (need ticker.info):")
     for rt in fund_rules.available_rules():
-        print(f"  - {rt}")
+        doc = fund_rules.get_doc(rt)
+        print(f"  - {rt:30s} {doc}")
+
+
+def cmd_snooze(args):
+    db.init_db()
+    if args.action == "add":
+        until = (datetime.utcnow().date() + timedelta(days=args.days)).isoformat()
+        db.snooze_ticker(args.symbol, until, args.reason or "")
+        print(f"Snoozed {args.symbol.upper()} until {until} "
+              f"(reason: {args.reason or 'unspecified'})")
+    elif args.action == "remove":
+        db.unsnooze_ticker(args.symbol)
+        print(f"Removed snooze on {args.symbol.upper()}")
+    elif args.action == "list":
+        rows = db.list_snoozes(active_only=False)
+        if not rows:
+            print("(no snoozes)")
+            return
+        today = str(datetime.utcnow().date())
+        for symbol, until, reason, created in rows:
+            status = "ACTIVE" if until >= today else "EXPIRED"
+            r = f"  ({reason})" if reason else ""
+            print(f"  {symbol:8s}  until {until}  [{status}]{r}")
 
 
 def _build_parser():
@@ -243,7 +270,17 @@ def _build_parser():
     sc = sub.add_parser("scan-once", help="Run a single scan now")
     sc.add_argument("--group", help="Limit scan to one watchlist group")
     sc.add_argument("--ticker", help="Limit scan to one symbol")
-    sub.add_parser("rules-available", help="List registered rule types")
+    sub.add_parser("rules-available", help="List registered rule types with descriptions")
+
+    ps = sub.add_parser("snooze", help="Mute alerts for a ticker")
+    pss = ps.add_subparsers(dest="action", required=True)
+    ps_add = pss.add_parser("add")
+    ps_add.add_argument("symbol")
+    ps_add.add_argument("--days", type=int, required=True,
+                        help="Number of days to snooze (from today, inclusive)")
+    ps_add.add_argument("--reason", default="", help="Optional human-readable reason")
+    ps_rm = pss.add_parser("remove"); ps_rm.add_argument("symbol")
+    pss.add_parser("list")
     return p
 
 
@@ -256,6 +293,7 @@ def main(argv=None):
         "rule": cmd_rule,
         "scan-once": cmd_scan_once,
         "rules-available": cmd_rules_available,
+        "snooze": cmd_snooze,
     }[args.cmd](args)
 
 

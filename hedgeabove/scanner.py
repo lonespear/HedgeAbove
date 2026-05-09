@@ -126,6 +126,10 @@ def run(verbose=True, group=None, ticker=None):
         if verbose:
             print(f"-- '{group_name}': {len(tickers)} tickers x {len(rules)} rules")
         for symbol in tickers:
+            if db.is_snoozed(symbol):
+                if verbose:
+                    print(f"  {symbol}: snoozed, skipping")
+                continue
             fired = _scan_ticker(symbol, rules, verbose=verbose)
             for _, msg in fired:
                 if verbose:

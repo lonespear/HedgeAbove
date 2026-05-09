@@ -44,6 +44,7 @@ def _frac_to_pct(v):
 
 @rule("pe_below")
 def pe_below(info, params):
+    """Fires when trailing P/E is below threshold. Params: threshold (default 15)."""
     threshold = float(params.get("threshold", 15.0))
     pe = _pos(info.get("pe_ratio"))
     if pe is None:
@@ -55,6 +56,7 @@ def pe_below(info, params):
 
 @rule("pe_above")
 def pe_above(info, params):
+    """Fires when trailing P/E is above threshold. Params: threshold (default 40)."""
     threshold = float(params.get("threshold", 40.0))
     pe = _pos(info.get("pe_ratio"))
     if pe is None:
@@ -66,6 +68,7 @@ def pe_above(info, params):
 
 @rule("pb_below")
 def pb_below(info, params):
+    """Fires when P/B is below threshold. Params: threshold (default 1.5)."""
     threshold = float(params.get("threshold", 1.5))
     pb = _pos(info.get("price_to_book"))
     if pb is None:
@@ -77,6 +80,7 @@ def pb_below(info, params):
 
 @rule("dividend_yield_above")
 def dividend_yield_above(info, params):
+    """Fires when dividend yield (in %) is above threshold. Params: threshold (default 3.0 = 3%)."""
     threshold_pct = float(params.get("threshold", 3.0))
     dy = info.get("dividend_yield")
     if dy is None or dy == 0:
@@ -89,6 +93,7 @@ def dividend_yield_above(info, params):
 
 @rule("revenue_growth_above")
 def revenue_growth_above(info, params):
+    """Fires when YoY revenue growth (%) is above threshold. Params: threshold (default 15)."""
     threshold_pct = float(params.get("threshold", 15.0))
     g = info.get("revenue_growth")
     if g is None:
@@ -101,6 +106,7 @@ def revenue_growth_above(info, params):
 
 @rule("earnings_growth_above")
 def earnings_growth_above(info, params):
+    """Fires when earnings growth (%) is above threshold. Params: threshold (default 20)."""
     threshold_pct = float(params.get("threshold", 20.0))
     g = info.get("earnings_growth")
     if g is None:
@@ -113,6 +119,7 @@ def earnings_growth_above(info, params):
 
 @rule("roe_above")
 def roe_above(info, params):
+    """Fires when return on equity (%) is above threshold. Params: threshold (default 20)."""
     threshold_pct = float(params.get("threshold", 20.0))
     roe = info.get("roe")
     if roe is None:
@@ -125,6 +132,7 @@ def roe_above(info, params):
 
 @rule("profit_margin_above")
 def profit_margin_above(info, params):
+    """Fires when profit margin (%) is above threshold. Params: threshold (default 20)."""
     threshold_pct = float(params.get("threshold", 20.0))
     pm = info.get("profit_margin")
     if pm is None:
@@ -137,6 +145,7 @@ def profit_margin_above(info, params):
 
 @rule("debt_to_equity_below")
 def debt_to_equity_below(info, params):
+    """Fires when debt/equity is below threshold. Params: threshold (default 50)."""
     threshold = float(params.get("threshold", 50.0))
     de = info.get("debt_to_equity")
     if de is None:
@@ -148,6 +157,7 @@ def debt_to_equity_below(info, params):
 
 @rule("analyst_upside_above")
 def analyst_upside_above(info, params):
+    """Fires when analyst mean target / current price - 1 (%) is above threshold. Params: threshold (default 20)."""
     threshold_pct = float(params.get("threshold", 20.0))
     target = _pos(info.get("target_mean_price"))
     price = _pos(info.get("current_price"))
@@ -170,3 +180,11 @@ def evaluate(rule_type, stock_info, params=None):
 
 def available_rules():
     return sorted(REGISTRY.keys())
+
+
+def get_doc(rule_type):
+    """Return the rule's docstring (first line) — used for UI hints + CLI help."""
+    fn = REGISTRY.get(rule_type)
+    if fn is None or not fn.__doc__:
+        return ""
+    return fn.__doc__.strip().split("\n", 1)[0]

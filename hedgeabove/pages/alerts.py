@@ -4,7 +4,8 @@ Alerts page — manage watchlist groups, rules, and view fire history.
 Reads/writes the same SQLite tables as the headless scanner (scan.py / cron),
 so configuration changes here take effect on the next scan run.
 """
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -25,6 +26,14 @@ def _rule_kind(rt):
     if rt in fund_rules.REGISTRY:
         return "fundamental"
     return "unknown"
+
+
+def _rule_doc(rt):
+    if rt in tech_rules.REGISTRY:
+        return tech_rules.get_doc(rt)
+    if rt in fund_rules.REGISTRY:
+        return fund_rules.get_doc(rt)
+    return ""
 
 
 def _todays_alert_count():
@@ -118,20 +127,51 @@ def _render_group(gid, name):
             if r4.button("Delete", key=f"del_rule_{rid}"):
                 db.delete_alert_rule(rid)
                 st.rerun()
+            with st.expander(f"Edit params · {rt}", expanded=False):
+                doc = _rule_doc(rt)
+                if doc:
+                    st.caption(doc)
+                edited = st.text_area(
+                    "Params (JSON)", value=params or "{}",
+                    key=f"params_edit_{rid}", height=80,
+                )
+                if st.button("Save params", key=f"params_save_{rid}"):
+                    try:
+                        parsed = json.loads(edited)
+                        if not isinstance(parsed, dict):
+                            raise ValueError("Params must be a JSON object.")
+                        db.set_alert_rule_params(rid, json.dumps(parsed))
+                        st.success("Params saved.")
+                        st.rerun()
+                    except (ValueError, json.JSONDecodeError) as e:
+                        st.error(f"Invalid JSON: {e}")
     else:
         st.caption("(no rules — add one below)")
 
     existing_types = {row[1] for row in rules}
     available = [r for r in _all_rule_types() if r not in existing_types]
     if available:
-        ar1, ar2 = st.columns([3, 1])
-        new_rule = ar1.selectbox(
+        new_rule = st.selectbox(
             "Add rule", available, key=f"new_rule_{gid}",
-            label_visibility="collapsed",
+            format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})",
         )
-        if ar2.button("Add rule", key=f"add_rule_btn_{gid}", use_container_width=True):
-            db.add_alert_rule(gid, new_rule)
-            st.rerun()
+        doc = _rule_doc(new_rule)
+        if doc:
+            st.caption(doc)
+        new_params = st.text_input(
+            "Optional params (JSON)", value="{}",
+            key=f"new_rule_params_{gid}",
+            placeholder='e.g. {"threshold": 25} or {"target_price": 300}',
+        )
+        if st.button("Add rule", key=f"add_rule_btn_{gid}"):
+            try:
+                parsed = json.loads(new_params or "{}")
+                if not isinstance(parsed, dict):
+                    raise ValueError("Params must be a JSON object.")
+                db.add_alert_rule(gid, new_rule, json.dumps(parsed))
+                st.rerun()
+            except (ValueError, json.JSONDecodeError) as e:
+                st.error(f"Invalid JSON: {e}")
     else:
         st.caption("All registered rule types are already attached to this group.")
 
@@ -190,6 +230,42 @@ def render():
                     st.rerun()
             else:
                 st.error("Name cannot be empty.")
+
+    st.markdown("---")
+    st.subheader("Snoozed tickers")
+    st.caption("Snoozed tickers are skipped by the scanner until their snooze expires. "
+               "Useful for muting noisy signals without removing the ticker from a watchlist.")
+    snoozes = db.list_snoozes(active_only=False)
+    if snoozes:
+        today = str(datetime.utcnow().date())
+        for symbol, until, reason, created in snoozes:
+            sc1, sc2, sc3, sc4 = st.columns([1, 2, 3, 1])
+            sc1.write(f"**{symbol}**")
+            status = "ACTIVE" if until >= today else "EXPIRED"
+            sc2.write(f"until {until} _({status})_")
+            sc3.write(reason or "_(no reason)_")
+            if sc4.button("Remove", key=f"unsnooze_{symbol}"):
+                db.unsnooze_ticker(symbol)
+                st.rerun()
+    else:
+        st.caption("(no snoozes)")
+    with st.expander("Add snooze"):
+        sn1, sn2, sn3, sn4 = st.columns([2, 1, 3, 1])
+        new_sym = sn1.text_input("Symbol", key="snooze_sym",
+                                 placeholder="AAPL",
+                                 label_visibility="collapsed")
+        days = sn2.number_input("Days", min_value=1, max_value=365, value=7,
+                                key="snooze_days", label_visibility="collapsed")
+        reason = sn3.text_input("Reason (optional)", key="snooze_reason",
+                                placeholder="e.g. earnings noise",
+                                label_visibility="collapsed")
+        if sn4.button("Snooze", key="snooze_add", use_container_width=True):
+            if new_sym.strip():
+                until = (datetime.utcnow().date() + timedelta(days=int(days))).isoformat()
+                db.snooze_ticker(new_sym.strip(), until, reason.strip())
+                st.rerun()
+            else:
+                st.error("Symbol cannot be empty.")
 
     st.markdown("---")
     st.subheader("Recent alert history")

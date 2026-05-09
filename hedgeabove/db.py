@@ -81,6 +81,15 @@ def init_db():
             message     TEXT    NOT NULL,
             UNIQUE(symbol, rule_type, fired_date)
         );
+
+        -- Per-ticker snooze: scanner skips alerts for symbols listed here
+        -- when the current UTC date is on or before until_date.
+        CREATE TABLE IF NOT EXISTS snooze (
+            symbol      TEXT    PRIMARY KEY,
+            until_date  TEXT    NOT NULL,
+            reason      TEXT,
+            created_at  TEXT    NOT NULL
+        );
     """)
     conn.commit()
     conn.close()
@@ -382,5 +391,70 @@ def recent_alerts(limit=50):
         "ORDER BY fired_at DESC LIMIT ?",
         (limit,),
     ).fetchall()
+    conn.close()
+    return rows
+
+
+def set_alert_rule_params(rule_id, params_json):
+    """Update an existing rule's params_json. Used by the UI param editor."""
+    conn = _get_conn()
+    conn.execute(
+        "UPDATE alert_rules SET params_json = ? WHERE id = ?",
+        (params_json, rule_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── Snooze ──────────────────────────────────────────────────────
+
+def snooze_ticker(symbol, until_date, reason=""):
+    """Snooze alerts for `symbol` until `until_date` (ISO YYYY-MM-DD, inclusive).
+    Idempotent: replaces any existing snooze on the same symbol."""
+    now = datetime.utcnow().isoformat()
+    conn = _get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO snooze (symbol, until_date, reason, created_at) "
+        "VALUES (?, ?, ?, ?)",
+        (symbol.upper(), until_date, reason, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def unsnooze_ticker(symbol):
+    conn = _get_conn()
+    conn.execute("DELETE FROM snooze WHERE symbol = ?", (symbol.upper(),))
+    conn.commit()
+    conn.close()
+
+
+def is_snoozed(symbol):
+    """True if `symbol` has an active snooze (until_date >= today UTC)."""
+    today = str(datetime.utcnow().date())
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT 1 FROM snooze WHERE symbol = ? AND until_date >= ?",
+        (symbol.upper(), today),
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def list_snoozes(active_only=True):
+    """Return list of (symbol, until_date, reason, created_at). active_only filters to non-expired."""
+    today = str(datetime.utcnow().date())
+    conn = _get_conn()
+    if active_only:
+        rows = conn.execute(
+            "SELECT symbol, until_date, reason, created_at FROM snooze "
+            "WHERE until_date >= ? ORDER BY symbol",
+            (today,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT symbol, until_date, reason, created_at FROM snooze "
+            "ORDER BY symbol"
+        ).fetchall()
     conn.close()
     return rows
