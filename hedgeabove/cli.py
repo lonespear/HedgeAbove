@@ -304,6 +304,36 @@ def cmd_strategy(args):
                   f"${r.entry_price:>8.2f} -> ${r.exit_price:>8.2f}  "
                   f"{sign}{r.return_pct*100:6.2f}%")
 
+    if args.tearsheet:
+        from hedgeabove.backtest.tearsheet import tearsheet
+        ts = tearsheet(res["equity_curve"], res.get("benchmark_curve"))
+
+        yr = ts["calendar_year_returns"]
+        if not yr.empty:
+            print("\n  Calendar-year returns:")
+            for d, r in yr.items():
+                print(f"    {d.year}:  {r*100:+7.2f}%")
+
+        dd_max = ts.get("max_drawdown")
+        if dd_max is not None:
+            print(f"\n  Drawdown analysis:")
+            print(f"    Max drawdown:        {dd_max*100:7.2f}%")
+            print(f"    Max DD bottomed on:  {ts['max_drawdown_date'].date()}")
+            print(f"    Longest underwater:  {ts['longest_drawdown_days']} trading days")
+
+        rs = ts["rolling_sharpe_252d"].dropna()
+        if not rs.empty:
+            print(f"\n  Rolling 252-day Sharpe:")
+            print(f"    Latest: {rs.iloc[-1]:5.2f}")
+            print(f"    Min:    {rs.min():5.2f}")
+            print(f"    Max:    {rs.max():5.2f}")
+            print(f"    Mean:   {rs.mean():5.2f}")
+
+        beta = ts.get("beta")
+        if beta is not None:
+            bm = res["summary"].get("benchmark", "benchmark")
+            print(f"\n  Beta to {bm}: {beta:.2f}")
+
 
 def cmd_presets(args):
     from hedgeabove.scoring.composite import PRESETS, FACTORS
@@ -544,6 +574,8 @@ def _build_parser():
     pst.add_argument("--no-benchmark", dest="benchmark", action="store_const", const=None,
                      help="Skip benchmark comparison")
     pst.add_argument("--show-trades", action="store_true", help="Print last 15 trades")
+    pst.add_argument("--tearsheet", action="store_true",
+                     help="Print calendar-year returns, drawdown stats, rolling Sharpe, beta")
 
     psc = sub.add_parser("score", help="Cross-sectional rank a universe by weighted Z-scored factors")
     pscg = psc.add_mutually_exclusive_group(required=True)
