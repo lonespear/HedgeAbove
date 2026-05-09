@@ -399,6 +399,23 @@ def cmd_analyze(args):
             print(f"    {f.fire_date.date()}  ${f.price_at_fire:>8.2f}  "
                   f"5d={r5}  20d={r20}  {f.message}")
 
+    if args.by_regime:
+        from hedgeabove.backtest.regime import by_regime_summary, available_regimes
+        if args.by_regime not in available_regimes():
+            print(f"\nUnknown regime: {args.by_regime}. "
+                  f"Available: {available_regimes()}", file=sys.stderr)
+            return
+        for h in DEFAULT_HORIZONS:
+            agg = by_regime_summary(fires, args.by_regime, horizon=h)
+            if agg.empty:
+                continue
+            print(f"\n  Forward returns by {args.by_regime} regime ({h}d horizon):")
+            print(f"    {'regime':>12s}  {'n':>5s}  {'hit_rate':>9s}  {'avg':>9s}  {'median':>9s}  {'std':>8s}")
+            for _, r in agg.iterrows():
+                # Use bracket access — `median` and `std` collide with pandas methods
+                print(f"    {r['regime']:>12s}  {int(r['n']):>5d}  {r['hit_rate']:>8.1%}  "
+                      f"{r['avg']:>+8.2%}  {r['median']:>+8.2%}  {r['std']:>7.2%}")
+
 
 def cmd_snooze(args):
     db.init_db()
@@ -490,6 +507,8 @@ def _build_parser():
                     help="Override default rule params, e.g. --param threshold=25")
     pa.add_argument("--show-fires", action="store_true",
                     help="Also print the last 10 fire events with forward returns")
+    pa.add_argument("--by-regime", choices=["vix", "yield_curve"],
+                    help="Break down forward returns by macro regime (FRED VIXCLS or 2s10s slope)")
 
     ps = sub.add_parser("snooze", help="Mute alerts for a ticker")
     pss = ps.add_subparsers(dest="action", required=True)
