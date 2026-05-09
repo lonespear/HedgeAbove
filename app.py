@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 from hedgeabove.db import init_db, load_positions, list_portfolios, create_portfolio
 from hedgeabove.pages import (
     home, screener, portfolio, risk_analytics, optimization,
-    predictions, options_pricing, backtest,
+    predictions, options_pricing, backtest, alerts,
 )
 
 # ── Page configuration ──────────────────────────────────────────
@@ -67,7 +67,7 @@ st.sidebar.markdown("---")
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Stock Screener", "Portfolio Builder", "Risk Analytics",
+    ["Home", "Stock Screener", "Alerts & Watchlists", "Portfolio Builder", "Risk Analytics",
      "Portfolio Optimization", "AI Predictions", "Backtesting", "Options Pricing"],
 )
 
@@ -80,6 +80,7 @@ st.sidebar.button("Upgrade to Pro", type="primary", use_container_width=True)
 PAGE_MAP = {
     "Home": home.render,
     "Stock Screener": screener.render,
+    "Alerts & Watchlists": alerts.render,
     "Portfolio Builder": portfolio.render,
     "Risk Analytics": risk_analytics.render,
     "Portfolio Optimization": optimization.render,
