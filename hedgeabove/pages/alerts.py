@@ -203,71 +203,90 @@ def render():
     _render_top(groups)
 
     st.markdown("---")
-    st.subheader("Watchlist groups")
 
-    if not groups:
-        st.info(
-            "No watchlists yet. Create one below, then attach tickers and rules. "
-            "Or run `python -m hedgeabove.cli init` from a terminal to seed a default."
-        )
-    else:
-        names = [n for _, n in groups]
-        selected = st.selectbox("Select group", names, key="alerts_selected_group")
-        gid = next(g for g, n in groups if n == selected)
-        _render_group(gid, selected)
+    tab_setup, tab_analyze, tab_history = st.tabs([
+        "Watchlists & Rules", "Rule Analytics", "Alert History",
+    ])
 
-    with st.expander("Create new watchlist group"):
-        c1, c2 = st.columns([3, 1])
-        new_name = c1.text_input("Group name", key="new_group_name",
-                                 label_visibility="collapsed",
-                                 placeholder="e.g. tech-megacaps")
-        if c2.button("Create group", use_container_width=True):
-            if new_name.strip():
-                if db.get_watchlist_group_by_name(new_name.strip()):
-                    st.error(f"Group '{new_name}' already exists.")
+    with tab_setup:
+        st.subheader("Watchlist groups")
+        if not groups:
+            st.info(
+                "No watchlists yet. Create one below, then attach tickers and rules. "
+                "Or run `python -m hedgeabove.cli init` from a terminal to seed a default."
+            )
+        else:
+            names = [n for _, n in groups]
+            selected = st.selectbox("Select group", names, key="alerts_selected_group")
+            gid = next(g for g, n in groups if n == selected)
+            _render_group(gid, selected)
+
+        with st.expander("Create new watchlist group"):
+            c1, c2 = st.columns([3, 1])
+            new_name = c1.text_input("Group name", key="new_group_name",
+                                     label_visibility="collapsed",
+                                     placeholder="e.g. tech-megacaps")
+            if c2.button("Create group", use_container_width=True):
+                if new_name.strip():
+                    if db.get_watchlist_group_by_name(new_name.strip()):
+                        st.error(f"Group '{new_name}' already exists.")
+                    else:
+                        db.create_watchlist_group(new_name.strip())
+                        st.rerun()
                 else:
-                    db.create_watchlist_group(new_name.strip())
+                    st.error("Name cannot be empty.")
+
+        st.markdown("---")
+        st.subheader("Snoozed tickers")
+        st.caption("Snoozed tickers are skipped by the scanner until their snooze expires. "
+                   "Useful for muting noisy signals without removing them from a watchlist.")
+        snoozes = db.list_snoozes(active_only=False)
+        if snoozes:
+            today = str(datetime.utcnow().date())
+            for symbol, until, reason, created in snoozes:
+                sc1, sc2, sc3, sc4 = st.columns([1, 2, 3, 1])
+                sc1.write(f"**{symbol}**")
+                status = "ACTIVE" if until >= today else "EXPIRED"
+                sc2.write(f"until {until} _({status})_")
+                sc3.write(reason or "_(no reason)_")
+                if sc4.button("Remove", key=f"unsnooze_{symbol}"):
+                    db.unsnooze_ticker(symbol)
                     st.rerun()
-            else:
-                st.error("Name cannot be empty.")
+        else:
+            st.caption("(no snoozes)")
+        with st.expander("Add snooze"):
+            sn1, sn2, sn3, sn4 = st.columns([2, 1, 3, 1])
+            new_sym = sn1.text_input("Symbol", key="snooze_sym",
+                                     placeholder="AAPL",
+                                     label_visibility="collapsed")
+            days = sn2.number_input("Days", min_value=1, max_value=365, value=7,
+                                    key="snooze_days", label_visibility="collapsed")
+            reason = sn3.text_input("Reason (optional)", key="snooze_reason",
+                                    placeholder="e.g. earnings noise",
+                                    label_visibility="collapsed")
+            if sn4.button("Snooze", key="snooze_add", use_container_width=True):
+                if new_sym.strip():
+                    until = (datetime.utcnow().date() + timedelta(days=int(days))).isoformat()
+                    db.snooze_ticker(new_sym.strip(), until, reason.strip())
+                    st.rerun()
+                else:
+                    st.error("Symbol cannot be empty.")
 
-    st.markdown("---")
-    st.subheader("Snoozed tickers")
-    st.caption("Snoozed tickers are skipped by the scanner until their snooze expires. "
-               "Useful for muting noisy signals without removing the ticker from a watchlist.")
-    snoozes = db.list_snoozes(active_only=False)
-    if snoozes:
-        today = str(datetime.utcnow().date())
-        for symbol, until, reason, created in snoozes:
-            sc1, sc2, sc3, sc4 = st.columns([1, 2, 3, 1])
-            sc1.write(f"**{symbol}**")
-            status = "ACTIVE" if until >= today else "EXPIRED"
-            sc2.write(f"until {until} _({status})_")
-            sc3.write(reason or "_(no reason)_")
-            if sc4.button("Remove", key=f"unsnooze_{symbol}"):
-                db.unsnooze_ticker(symbol)
-                st.rerun()
-    else:
-        st.caption("(no snoozes)")
-    with st.expander("Add snooze"):
-        sn1, sn2, sn3, sn4 = st.columns([2, 1, 3, 1])
-        new_sym = sn1.text_input("Symbol", key="snooze_sym",
-                                 placeholder="AAPL",
-                                 label_visibility="collapsed")
-        days = sn2.number_input("Days", min_value=1, max_value=365, value=7,
-                                key="snooze_days", label_visibility="collapsed")
-        reason = sn3.text_input("Reason (optional)", key="snooze_reason",
-                                placeholder="e.g. earnings noise",
-                                label_visibility="collapsed")
-        if sn4.button("Snooze", key="snooze_add", use_container_width=True):
-            if new_sym.strip():
-                until = (datetime.utcnow().date() + timedelta(days=int(days))).isoformat()
-                db.snooze_ticker(new_sym.strip(), until, reason.strip())
-                st.rerun()
-            else:
-                st.error("Symbol cannot be empty.")
+    with tab_analyze:
+        _render_rule_analytics()
 
-    st.markdown("---")
+    with tab_history:
+        st.subheader("Recent alert history")
+        history = db.recent_alerts(50)
+        if history:
+            df = pd.DataFrame(history, columns=["Symbol", "Rule", "Fired At (UTC)", "Message"])
+            df["Fired At (UTC)"] = df["Fired At (UTC)"].str[:19].str.replace("T", " ")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No alerts fired yet. Tickers, rules, and a scan run will populate this.")
+
+
+def _render_rule_analytics():
     st.subheader("Rule analytics — does this signal actually work?")
     st.caption(
         "Replays a rule over historical bars and measures forward returns at "
