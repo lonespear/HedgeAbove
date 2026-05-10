@@ -24,6 +24,7 @@ Usage:
     python -m hedgeabove.cli presets
     python -m hedgeabove.cli strategy <rule_type> [--symbols A,B | --watchlist <name>] [--period 5y] [--hold-days 20] [--param k=v ...]
     python -m hedgeabove.cli walk-forward <SYMBOL> <rule_type> --param-name <k> --param-grid v1,v2,v3 [--period 10y] [--horizon 20] [--folds 5] [--score sharpe|hit_rate|avg_return]
+    python -m hedgeabove.cli ic <factor> --symbols A,B|--universe sp500 [--period 5y] [--horizon 21] [--rebalance ME|W|QE]
 """
 import argparse
 import json
@@ -358,6 +359,66 @@ def cmd_strategy(args):
         if beta is not None:
             bm = res["summary"].get("benchmark", "benchmark")
             print(f"\n  Beta to {bm}: {beta:.2f}")
+
+
+def cmd_ic(args):
+    from hedgeabove.scoring.ic import factor_ic, factor_ic_summary
+    from hedgeabove.scoring.composite import FACTORS
+    if args.factor not in FACTORS:
+        print(f"Unknown factor: {args.factor}. Available: {list(FACTORS)}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.symbols:
+        symbols = [s.strip().upper() for s in args.symbols.split(",")]
+    elif args.universe == "sp500":
+        from hedgeabove.data.universe import get_sp500_tickers
+        seen = set()
+        symbols = [s for s in get_sp500_tickers() if not (s in seen or seen.add(s))]
+    else:
+        print("Need --symbols or --universe", file=sys.stderr)
+        sys.exit(1)
+
+    periods_per_year = {"ME": 12, "W": 52, "QE": 4}.get(args.rebalance, 12)
+    print(f"\nIC analysis: factor='{args.factor}' on {len(symbols)} ticker(s)")
+    print(f"  Period: {args.period}  Horizon: {args.horizon}d  "
+          f"Rebalance: {args.rebalance} ({periods_per_year}/yr)")
+
+    ic_df = factor_ic(args.factor, symbols,
+                      period=args.period,
+                      horizon=args.horizon,
+                      rebalance_freq=args.rebalance)
+    if ic_df.empty:
+        print("No IC data -- insufficient cross-section coverage at any rebalance date.")
+        return
+
+    s = factor_ic_summary(ic_df, periods_per_year=periods_per_year)
+    print(f"\n  Periods evaluated: {s['n_periods']}")
+    print(f"  Mean IC:           {s['mean_ic']:>+8.4f}")
+    print(f"  Std IC:            {s['std_ic']:>8.4f}")
+    if s.get("ir_annualized") is not None:
+        print(f"  IR (annualized):   {s['ir_annualized']:>+8.2f}")
+    if s.get("t_stat") is not None:
+        print(f"  t-stat:            {s['t_stat']:>+8.2f}")
+    print(f"  % positive periods: {s['pct_positive']:>7.1%}")
+    print(f"  IC range:          [{s['min_ic']:+.4f}, {s['max_ic']:+.4f}]")
+
+    # Quick verdict
+    abs_ic = abs(s["mean_ic"])
+    if abs_ic >= 0.05:
+        verdict = "real factor"
+    elif abs_ic >= 0.03:
+        verdict = "weak signal"
+    else:
+        verdict = "no edge"
+    direction = "positive" if s["mean_ic"] > 0 else "negative"
+    print(f"  Verdict:           {verdict} ({direction})")
+
+    if args.show_periods:
+        print("\n  Per-rebalance IC (last 12):")
+        recent = ic_df.tail(12)
+        for _, r in recent.iterrows():
+            print(f"    {r['rebalance_date']}  n={r['n_tickers']:>3d}  "
+                  f"ic={r['ic']:>+7.4f}")
 
 
 def cmd_walk_forward(args):
@@ -708,6 +769,19 @@ def _build_parser():
 
     sub.add_parser("presets", help="List built-in factor presets")
 
+    pic = sub.add_parser("ic", help="Information Coefficient analysis (factor predictiveness)")
+    pic.add_argument("factor", help="Factor name (see `cli presets`)")
+    picg = pic.add_mutually_exclusive_group(required=True)
+    picg.add_argument("--symbols", help="Comma-separated tickers")
+    picg.add_argument("--universe", choices=["sp500"], help="Built-in universe")
+    pic.add_argument("--period", default="5y", help="yfinance period (default 5y)")
+    pic.add_argument("--horizon", type=int, default=21,
+                     help="Forward-return horizon in trading days (default 21 ~= 1 month)")
+    pic.add_argument("--rebalance", choices=["ME", "W", "QE"], default="ME",
+                     help="Rebalance frequency: ME=monthly (default), W=weekly, QE=quarterly")
+    pic.add_argument("--show-periods", action="store_true",
+                     help="Print last 12 per-rebalance ICs")
+
     pwf = sub.add_parser("walk-forward",
                          help="Walk-forward parameter optimization (out-of-sample validation)")
     pwf.add_argument("symbol")
@@ -817,6 +891,7 @@ def main(argv=None):
         "presets": cmd_presets,
         "strategy": cmd_strategy,
         "walk-forward": cmd_walk_forward,
+        "ic": cmd_ic,
     }[args.cmd](args)
 
 
