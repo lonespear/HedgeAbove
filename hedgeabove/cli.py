@@ -468,24 +468,45 @@ def cmd_score(args):
         print("Need --symbols A,B,C or --universe sp500", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Scoring {len(symbols)} ticker(s) on {label}: {weights}")
-    print("(parallel fetch — this can take a while; cold S&P 500 is ~5-10 min)")
+    extra_note = ""
+    if args.sector_neutral:
+        extra_note = "  (sector-neutral: Z-scored within sector)"
+    elif args.by_sector:
+        extra_note = "  (output grouped by sector)"
+    print(f"Scoring {len(symbols)} ticker(s) on {label}: {weights}{extra_note}")
+    print("(parallel fetch -- this can take a while; cold S&P 500 is ~5-10 min)")
 
     def progress(i, n, sym):
         if i == n or i % 5 == 0:
             print(f"  [{i:>4d}/{n}] {sym:8s}", end="\r", flush=True)
 
-    df = score_universe(symbols, weights, progress=progress)
+    df = score_universe(
+        symbols, weights, progress=progress,
+        sector_neutral=args.sector_neutral,
+        attach_sector=args.sector_neutral or args.by_sector,
+    )
     print()  # newline after progress
 
     if df.empty:
-        print("No results — every ticker is missing at least one required factor.")
+        print("No results -- every ticker is missing at least one required factor.")
         return
 
     cols_to_show = list(weights.keys()) + ["composite_score"]
-    top = df.head(args.top)[cols_to_show]
-    print(f"\nTop {len(top)} of {len(df)} (eligible after factor-completeness filter):")
-    print(top.to_string(float_format=lambda x: f"{x:>9.4f}"))
+    if args.sector_neutral or args.by_sector:
+        cols_to_show = ["sector"] + cols_to_show
+
+    if args.by_sector and "sector" in df.columns:
+        # Group output: top picks per sector
+        per = max(1, args.top // max(1, df["sector"].nunique()))
+        print(f"\nTop {per} per sector (of {len(df)} eligible):")
+        for sec, sub in df.groupby("sector"):
+            sub_top = sub.sort_values("composite_score", ascending=False).head(per)[cols_to_show]
+            print(f"\n  {sec}:")
+            print(sub_top.to_string(float_format=lambda x: f"{x:>9.4f}"))
+    else:
+        top = df.head(args.top)[cols_to_show]
+        print(f"\nTop {len(top)} of {len(df)} (eligible after factor-completeness filter):")
+        print(top.to_string(float_format=lambda x: f"{x:>9.4f}"))
 
     if args.save_as:
         from hedgeabove import db
@@ -735,6 +756,10 @@ def _build_parser():
     psug.add_argument("--universe", choices=["sp500"], help="Built-in universe")
     psc.add_argument("--top", type=int, default=20, help="Number of top names to show / save")
     psc.add_argument("--save-as", help="Save the top-N as a watchlist group with this name")
+    psc.add_argument("--sector-neutral", action="store_true",
+                     help="Z-score factors within each sector (don't over-rank cheap-sector names)")
+    psc.add_argument("--by-sector", action="store_true",
+                     help="Group output by sector with top picks per sector")
 
     pa = sub.add_parser("analyze", help="Backtest a single rule, or a composite via --rules")
     pa.add_argument("symbol")

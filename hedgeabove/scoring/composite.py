@@ -166,7 +166,8 @@ def _fetch_one(ticker, as_of):
         return ticker, None, None
 
 
-def score_universe(symbols, weights, as_of=None, max_workers=4, progress=None):
+def score_universe(symbols, weights, as_of=None, max_workers=4, progress=None,
+                   sector_neutral=False, attach_sector=False):
     """Score a list of symbols. See module docstring for details.
 
     Args:
@@ -175,11 +176,18 @@ def score_universe(symbols, weights, as_of=None, max_workers=4, progress=None):
       as_of: date or ISO string for fundamentals lookback (default today).
       max_workers: parallel fetcher pool size.
       progress: optional callable(i, n, ticker) for progress reporting.
+      sector_neutral: if True, Z-score each factor *within* sector instead of
+        across the whole universe. Tech P/E gets compared to other tech P/Es
+        (not utilities); useful for cross-sector strategies that don't want
+        to over-pick e.g. cheap energy names just because energy P/Es are
+        structurally lower than tech.
+      attach_sector: if True, include a 'sector' column in the output even
+        when sector_neutral is False. Implied True when sector_neutral=True.
 
     Returns:
       DataFrame ranked by composite_score descending. Index is symbol.
-      Columns include the raw factor values + composite_score. Empty
-      DataFrame if no ticker has all required factors.
+      Columns include the raw factor values + composite_score (and 'sector'
+      when attached). Empty DataFrame if no ticker has all required factors.
     """
     as_of = as_of or date.today()
 
@@ -225,18 +233,41 @@ def score_universe(symbols, weights, as_of=None, max_workers=4, progress=None):
 
     df = pd.DataFrame(rows).set_index("symbol")
 
-    # Z-score each factor; constant factors get all-zeros.
+    # Optionally tag with sector. Always required for sector-neutral mode.
+    if sector_neutral or attach_sector:
+        from hedgeabove.data.sectors import get_sector
+        df["sector"] = df.index.to_series().apply(get_sector)
+
     composite = pd.Series(0.0, index=df.index)
-    for factor, w in weights.items():
-        vals = df[factor]
-        mean = vals.mean()
-        std = vals.std(ddof=1)
-        if std == 0 or pd.isna(std):
-            z = pd.Series(0.0, index=df.index)
-        else:
-            z = (vals - mean) / std
-        df[f"{factor}_z"] = z
-        composite = composite + w * z
+    if sector_neutral:
+        # Z-score each factor *within* its sector group.
+        for factor, w in weights.items():
+            zs = pd.Series(index=df.index, dtype=float)
+            for sec, sub in df.groupby("sector"):
+                vals = sub[factor]
+                if len(vals) < 2:
+                    zs.loc[sub.index] = 0.0
+                    continue
+                mean = vals.mean()
+                std = vals.std(ddof=1)
+                if std == 0 or pd.isna(std):
+                    zs.loc[sub.index] = 0.0
+                else:
+                    zs.loc[sub.index] = (vals - mean) / std
+            df[f"{factor}_z"] = zs
+            composite = composite + w * zs
+    else:
+        # Z-score each factor across the whole universe.
+        for factor, w in weights.items():
+            vals = df[factor]
+            mean = vals.mean()
+            std = vals.std(ddof=1)
+            if std == 0 or pd.isna(std):
+                z = pd.Series(0.0, index=df.index)
+            else:
+                z = (vals - mean) / std
+            df[f"{factor}_z"] = z
+            composite = composite + w * z
 
     df["composite_score"] = composite
     df = df.sort_values("composite_score", ascending=False)
