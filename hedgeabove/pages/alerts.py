@@ -271,43 +271,124 @@ def render():
     st.subheader("Rule analytics — does this signal actually work?")
     st.caption(
         "Replays a rule over historical bars and measures forward returns at "
-        "5/10/20 day horizons. Use this to tune thresholds and prune signals "
-        "that don't deliver. Fundamental rules use SEC EDGAR XBRL filings for "
-        "point-in-time data (filing-date filtered, amendments deduped); "
-        "`analyst_upside_above` and `dividend_yield_above` aren't yet backtestable."
+        "5/10/20 day horizons. Fundamental rules use SEC EDGAR for point-in-time "
+        "data (filing-date filtered, amendments deduped); `analyst_upside_above` "
+        "and `dividend_yield_above` aren't yet backtestable."
     )
-    # All rule types except those without a free point-in-time source
     _UNBACKTESTABLE = {"analyst_upside_above", "dividend_yield_above"}
     backtestable = [r for r in _all_rule_types() if r not in _UNBACKTESTABLE]
-    ra1, ra2, ra3 = st.columns([2, 1, 1])
-    ana_rule = ra1.selectbox("Rule", backtestable, key="ana_rule",
-                             format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
-    ana_symbol = ra2.text_input("Symbol", value="SPY", key="ana_sym")
-    ana_period = ra3.selectbox("Period", ["1y", "2y", "5y", "10y", "max"],
-                               index=2, key="ana_period")
-    ana_params = st.text_input("Optional params (JSON)", value="{}",
-                               key="ana_params",
-                               placeholder='e.g. {"threshold": 25}')
-    if ana_rule:
-        st.caption(_rule_doc(ana_rule))
-    if st.button("Run backtest", type="secondary", key="ana_run"):
+
+    ana_mode = st.radio(
+        "Rule mode",
+        ["Single rule", "Composite (multi-rule AND/OR)"],
+        horizontal=True, key="ana_mode",
+    )
+
+    ana_rule = None
+    ana_composite_rules: list = []
+    ana_combiner = "all"
+
+    if ana_mode == "Single rule":
+        ra1, ra2, ra3 = st.columns([2, 1, 1])
+        ana_rule = ra1.selectbox("Rule", backtestable, key="ana_rule",
+                                 format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
+        ana_symbol = ra2.text_input("Symbol", value="SPY", key="ana_sym")
+        ana_period = ra3.selectbox("Period", ["1y", "2y", "5y", "10y", "max"],
+                                   index=2, key="ana_period")
+        ana_params = st.text_input("Optional params (JSON)", value="{}",
+                                   key="ana_params",
+                                   placeholder='e.g. {"threshold": 25}')
+        if ana_rule:
+            st.caption(_rule_doc(ana_rule))
+    else:
+        ra1, ra2 = st.columns([2, 1])
+        ana_composite_rules = ra1.multiselect(
+            "Rules", backtestable,
+            default=backtestable[:2] if len(backtestable) >= 2 else backtestable,
+            key="ana_composite_rules",
+            format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})",
+        )
+        ana_combiner = ra2.selectbox(
+            "Combiner", ["all", "any", "majority"],
+            key="ana_combiner",
+            help="all=AND, any=OR, majority=>50%",
+        )
+        ra3, ra4 = st.columns([1, 1])
+        ana_symbol = ra3.text_input("Symbol", value="SPY", key="ana_sym_c")
+        ana_period = ra4.selectbox("Period", ["1y", "2y", "5y", "10y", "max"],
+                                   index=2, key="ana_period_c")
+        ana_params = "{}"
+        if ana_composite_rules:
+            for rt in ana_composite_rules:
+                st.caption(f"  - `{rt}` _({_rule_kind(rt)})_: {_rule_doc(rt)}")
+
+    with st.expander("Advanced filters", expanded=False):
+        adv1, adv2, adv3 = st.columns(3)
+        ana_by_regime = adv1.selectbox(
+            "Macro regime breakdown",
+            ["(none)", "vix", "yield_curve"],
+            key="ana_by_regime",
+            help="Split forward returns by FRED VIX or 2s10s slope buckets",
+        )
+        ana_by_year = adv2.checkbox(
+            "Per-year breakdown + decay check", value=False, key="ana_by_year",
+            help="Show fires + hit rates by calendar year, with z-score vs prior years",
+        )
+        eb1, eb2 = adv3.columns(2)
+        ana_excl_before = eb1.number_input(
+            "Excl earnings days before", min_value=0, max_value=30, value=0,
+            key="ana_excl_before",
+        )
+        ana_excl_after = eb2.number_input(
+            "Excl earnings days after", min_value=0, max_value=30, value=0,
+            key="ana_excl_after",
+        )
+    excl_win = (
+        (int(ana_excl_before), int(ana_excl_after))
+        if (ana_excl_before > 0 or ana_excl_after > 0) else None
+    )
+
+    can_run = bool(ana_symbol.strip()) and (
+        (ana_mode == "Single rule" and ana_rule)
+        or (ana_mode != "Single rule" and len(ana_composite_rules) >= 1)
+    )
+
+    if st.button("Run backtest", type="secondary", key="ana_run", disabled=not can_run):
         try:
             params_dict = json.loads(ana_params or "{}")
         except json.JSONDecodeError as e:
             st.error(f"Invalid JSON: {e}")
         else:
             from hedgeabove.backtest.signals import (
-                summarize_rule, fires_to_dataframe, DEFAULT_HORIZONS,
+                summarize_rule, summarize_composite, fires_to_dataframe,
+                DEFAULT_HORIZONS,
             )
-            with st.spinner(f"Replaying {ana_rule} on {ana_symbol.upper()}..."):
-                summary, fires = summarize_rule(
-                    ana_symbol.upper(), ana_rule, params_dict, ana_period
-                )
-            st.write(f"**{summary['symbol']}** :: `{summary['rule_type']}`  "
-                     f"params={summary['params']}  period={summary['period']}")
+            sym = ana_symbol.upper().strip()
+            if ana_mode == "Single rule":
+                spinner_msg = f"Replaying {ana_rule} on {sym}..."
+            else:
+                spinner_msg = (f"Replaying composite ({ana_combiner.upper()}) of "
+                               f"{len(ana_composite_rules)} rule(s) on {sym}...")
+            with st.spinner(spinner_msg):
+                if ana_mode == "Single rule":
+                    summary, fires = summarize_rule(
+                        sym, ana_rule, params_dict, ana_period,
+                        exclude_earnings_window=excl_win,
+                    )
+                else:
+                    rules_list = [(rt, {}) for rt in ana_composite_rules]
+                    summary, fires = summarize_composite(
+                        sym, rules_list, ana_combiner, ana_period,
+                        exclude_earnings_window=excl_win,
+                    )
+
+            label = summary["rule_type"]
+            st.write(f"**{summary['symbol']}** :: `{label}`  "
+                     f"params={summary['params']}  period={summary['period']}"
+                     + (f"  exclude_earnings={excl_win}" if excl_win else ""))
             if summary["n_fires"] == 0:
                 st.warning("Rule never fired in this window. Try a different "
-                           "threshold or longer period.")
+                           "threshold, longer period, or composite combiner.")
             else:
                 metric_cols = st.columns(len(DEFAULT_HORIZONS) + 1)
                 metric_cols[0].metric("Total fires", summary["n_fires"])
@@ -322,8 +403,8 @@ def render():
                             f"{hr:.0%}",
                             delta=f"avg {avg:+.2%}",
                         )
-                # Per-horizon detail table
-                # Streamlit's NumberColumn formats raw values, so pre-scale to %.
+
+                # Per-horizon detail table (pre-scaled to %)
                 rows = []
                 for h in DEFAULT_HORIZONS:
                     hr = summary[f"hit_rate_{h}d"]
@@ -348,7 +429,8 @@ def render():
                                  "std %": st.column_config.NumberColumn(format="%.2f"),
                                  "sharpe": st.column_config.NumberColumn(format="%.2f"),
                              })
-                # Recent fires (pre-scale forward returns to percent)
+
+                # Recent fires
                 st.markdown("**Last 10 fires:**")
                 fires_df = fires_to_dataframe(fires).tail(10).reset_index(drop=True)
                 for col in [c for c in fires_df.columns if c.startswith("fwd_")]:
@@ -363,6 +445,75 @@ def render():
                                  "20d %": st.column_config.NumberColumn(format="%+.2f"),
                                  "price": st.column_config.NumberColumn(format="$%.2f"),
                              })
+
+                # Macro regime breakdown
+                if ana_by_regime != "(none)":
+                    from hedgeabove.backtest.regime import by_regime_summary
+                    st.markdown(f"**Forward returns by `{ana_by_regime}` regime:**")
+                    reg_tabs = st.tabs([f"{h}d" for h in DEFAULT_HORIZONS])
+                    for tab, h in zip(reg_tabs, DEFAULT_HORIZONS):
+                        with tab:
+                            agg = by_regime_summary(fires, ana_by_regime, horizon=h)
+                            if agg.empty:
+                                st.caption("(no data for this horizon)")
+                                continue
+                            disp = agg.copy()
+                            disp["hit_rate"] = disp["hit_rate"] * 100
+                            disp["avg"] = disp["avg"] * 100
+                            disp["median"] = disp["median"] * 100
+                            disp["std"] = disp["std"] * 100
+                            st.dataframe(disp, use_container_width=True, hide_index=True,
+                                         column_config={
+                                             "hit_rate": st.column_config.NumberColumn(format="%.1f%%", label="hit %"),
+                                             "avg": st.column_config.NumberColumn(format="%+.2f%%"),
+                                             "median": st.column_config.NumberColumn(format="%+.2f%%"),
+                                             "std": st.column_config.NumberColumn(format="%.2f%%"),
+                                         })
+
+                # Per-year breakdown + decay check
+                if ana_by_year:
+                    import numpy as np
+                    rows_y = [{"year": f.fire_date.year,
+                               **{f"fwd_{h}d": f.fwd_returns.get(h) for h in DEFAULT_HORIZONS}}
+                              for f in fires]
+                    ydf = pd.DataFrame(rows_y)
+                    if not ydf.empty:
+                        st.markdown("**Per-year breakdown:**")
+                        yr_tabs = st.tabs([f"{h}d" for h in DEFAULT_HORIZONS])
+                        for tab, h in zip(yr_tabs, DEFAULT_HORIZONS):
+                            with tab:
+                                col = f"fwd_{h}d"
+                                valid = ydf[ydf[col].notna()]
+                                if valid.empty:
+                                    st.caption("(no data)")
+                                    continue
+                                agg = valid.groupby("year")[col].agg(
+                                    n="count",
+                                    hit_rate=lambda x: float((x > 0).mean()) * 100,
+                                    avg=lambda x: float(x.mean()) * 100,
+                                    median=lambda x: float(x.median()) * 100,
+                                ).reset_index()
+                                st.dataframe(agg, use_container_width=True, hide_index=True,
+                                             column_config={
+                                                 "hit_rate": st.column_config.NumberColumn(format="%.1f%%", label="hit %"),
+                                                 "avg": st.column_config.NumberColumn(format="%+.2f%%"),
+                                                 "median": st.column_config.NumberColumn(format="%+.2f%%"),
+                                             })
+                                yearly_hr = dict(zip(agg["year"], agg["hit_rate"]))
+                                years = sorted(yearly_hr.keys())
+                                if len(years) >= 4:
+                                    last_y = years[-1]
+                                    prior = [yearly_hr[y] for y in years[:-1]]
+                                    mean_p = float(np.mean(prior))
+                                    std_p = float(np.std(prior, ddof=1)) if len(prior) > 1 else 0.0
+                                    z = (yearly_hr[last_y] - mean_p) / std_p if std_p > 0 else 0.0
+                                    tag = ""
+                                    if z < -1.5:
+                                        tag = " ⚠ possible alpha decay"
+                                    elif z > 1.5:
+                                        tag = " ↑ recent surge"
+                                    st.caption(f"Decay check: {last_y} hit {yearly_hr[last_y]:.1f}% "
+                                               f"vs prior mean {mean_p:.1f}% (z={z:+.2f}){tag}")
 
     st.markdown("---")
     st.subheader("Recent alert history")

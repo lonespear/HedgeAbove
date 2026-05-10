@@ -52,6 +52,15 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
+    /* Widen the sidebar ~20% so longer page names don't wrap */
+    section[data-testid="stSidebar"] {
+        width: 290px !important;
+        min-width: 290px !important;
+    }
+    section[data-testid="stSidebar"] > div {
+        width: 290px !important;
+        min-width: 290px !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
