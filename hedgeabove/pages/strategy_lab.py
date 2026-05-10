@@ -230,7 +230,11 @@ def _render_strategy_backtester():
 
     if mode == "Single rule":
         c1, c2, c3 = st.columns([2, 1, 1])
+        # Default to rsi_oversold so first-time "Run backtest" produces a
+        # meaningful result; falls back to first available if not present.
+        default_idx = backtestable.index("rsi_oversold") if "rsi_oversold" in backtestable else 0
         rule_type = c1.selectbox("Rule", backtestable, key="sl_strat_rule",
+                                 index=default_idx,
                                  format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
         period = c2.selectbox("Period", ["1y", "2y", "5y", "10y", "max"], index=2,
                               key="sl_strat_period")
@@ -512,7 +516,9 @@ def _render_walk_forward():
 
     backtestable = sorted(tech_rules.REGISTRY.keys())  # technical-only for now
     c1, c2, c3 = st.columns([2, 1, 1])
-    rt = c1.selectbox("Rule (technical only)", backtestable, key="sl_wf_rule")
+    wf_default_idx = backtestable.index("rsi_oversold") if "rsi_oversold" in backtestable else 0
+    rt = c1.selectbox("Rule (technical only)", backtestable,
+                      index=wf_default_idx, key="sl_wf_rule")
     sym = c2.text_input("Symbol", value="SPY", key="sl_wf_sym")
     period = c3.selectbox("Period", ["5y", "10y", "max"], index=1, key="sl_wf_period")
 
@@ -608,7 +614,11 @@ def _render_factor_ic():
 
     factor_choices = sorted(FACTORS.keys())
     c1, c2, c3 = st.columns([2, 1, 1])
-    factor = c1.selectbox("Factor", factor_choices, key="sl_ic_factor")
+    # Default to momentum_12_1 — a well-known factor that produces a
+    # tangible IC quickly on the default basket.
+    ic_default_idx = factor_choices.index("momentum_12_1") if "momentum_12_1" in factor_choices else 0
+    factor = c1.selectbox("Factor", factor_choices, index=ic_default_idx,
+                          key="sl_ic_factor")
     horizon = c2.number_input("Horizon (days)", min_value=5, max_value=63,
                               value=21, key="sl_ic_horizon")
     rebal = c3.selectbox("Rebalance", ["ME", "W", "QE"], key="sl_ic_rebal",

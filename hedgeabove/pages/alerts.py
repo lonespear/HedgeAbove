@@ -309,7 +309,9 @@ def _render_rule_analytics():
 
     if ana_mode == "Single rule":
         ra1, ra2, ra3 = st.columns([2, 1, 1])
+        ana_default_idx = backtestable.index("rsi_oversold") if "rsi_oversold" in backtestable else 0
         ana_rule = ra1.selectbox("Rule", backtestable, key="ana_rule",
+                                 index=ana_default_idx,
                                  format_func=lambda rt: f"{rt}  ({_rule_kind(rt)})")
         ana_symbol = ra2.text_input("Symbol", value="SPY", key="ana_sym")
         ana_period = ra3.selectbox("Period", ["1y", "2y", "5y", "10y", "max"],
