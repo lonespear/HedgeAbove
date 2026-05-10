@@ -51,7 +51,8 @@ def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days
                     starting_nav=1.0, benchmark="SPY",
                     rules=None, combiner="all",
                     max_concurrent=1,
-                    exclude_earnings_window=None):
+                    exclude_earnings_window=None,
+                    sizing="equal", target_vol=0.20):
     """Run the single-position basket simulator.
 
     Args:
@@ -125,7 +126,8 @@ def simulate_basket(symbols, rule_type=None, params=None, period="5y", hold_days
     equity = pd.Series(dtype=float)
     if all_fires:
         trades, equity = _simulate_daily(all_fires, bars_map, hold_days,
-                                         starting_nav, max_concurrent)
+                                         starting_nav, max_concurrent,
+                                         sizing=sizing, target_vol=target_vol)
     if not trades:
         return empty
 
@@ -204,7 +206,37 @@ def _close_at(df, exit_date):
         return float(df.iloc[idx]["Close"])
 
 
-def _simulate_daily(all_fires, bars_map, hold_days, starting_nav, max_concurrent):
+def _realized_vol_for_entry(sym_df, entry_date, lookback=60):
+    """Annualized realized vol of daily returns for `sym_df` over the
+    `lookback` trading days strictly before `entry_date`. None if not
+    enough bars."""
+    pre = sym_df[sym_df.index < entry_date].tail(lookback)
+    if len(pre) < max(20, lookback // 3):
+        return None
+    rets = pre["Close"].pct_change().dropna()
+    if rets.empty:
+        return None
+    sd = float(rets.std(ddof=1))
+    if sd <= 0:
+        return None
+    return sd * np.sqrt(252.0)
+
+
+def _vol_size_factor(sym_df, entry_date, target_vol, base_weight,
+                     scale_floor=0.5, scale_cap=2.0):
+    """Return a target capital weight that scales `base_weight` by
+    target_vol / realized_vol, clamped to [base_weight * scale_floor,
+    base_weight * scale_cap]. Falls back to base_weight when vol is
+    unavailable."""
+    rv = _realized_vol_for_entry(sym_df, entry_date)
+    if rv is None:
+        return base_weight
+    raw = base_weight * (target_vol / rv)
+    return max(base_weight * scale_floor, min(raw, base_weight * scale_cap))
+
+
+def _simulate_daily(all_fires, bars_map, hold_days, starting_nav, max_concurrent,
+                    sizing="equal", target_vol=0.20):
     """Daily portfolio simulator. Returns (trades_list, daily_nav_series).
 
     Walks every trading day in the span:
@@ -212,6 +244,13 @@ def _simulate_daily(all_fires, bars_map, hold_days, starting_nav, max_concurrent
       2. Process any fires arriving today, opening positions until either
          we hit max_concurrent or run out of cash.
       3. Mark all open positions to today's close; NAV = cash + Σ position values.
+
+    Sizing modes:
+      - "equal": each position takes 1/max_concurrent of NAV (clipped to cash).
+      - "inverse_vol": same base allocation, scaled by target_vol /
+        realized_vol_60d at entry, clamped to [0.5x, 2.0x] of base. Lower-vol
+        names get larger positions, higher-vol smaller — the standard
+        risk-parity-lite construction.
     """
     # Group fires by their date (pandas Timestamp), preserving fire order
     # so deterministic basket builds match across runs.
@@ -293,7 +332,11 @@ def _simulate_daily(all_fires, bars_map, hold_days, starting_nav, max_concurrent
             exit_date = sym_df.index[exit_idx]
 
             current_nav = cash + _mtm_open(d)
-            capital = min(current_nav * target_weight, cash)
+            base_capital = current_nav * target_weight
+            if sizing == "inverse_vol":
+                effective_weight = _vol_size_factor(sym_df, d, target_vol, target_weight)
+                base_capital = current_nav * effective_weight
+            capital = min(base_capital, cash)
             if capital <= 0:
                 continue
             cash -= capital

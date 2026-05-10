@@ -271,26 +271,30 @@ def cmd_strategy(args):
 
     params = dict(args.param) if args.param else {}
     excl_win = args.exclude_earnings
+    sizing_note = (f"  sizing={args.sizing}"
+                   + (f" target_vol={args.target_vol}" if args.sizing == "inverse_vol" else ""))
     if rules_list is not None:
         label = f"[{args.combine.upper()}: {','.join(rt for rt, _ in rules_list)}]"
         print(f"\nSimulating composite {label} on {len(symbols)} ticker(s)  "
               f"period={args.period}  hold={args.hold_days}d  max_concurrent={args.max_concurrent}"
-              + (f"  exclude_earnings={excl_win}" if excl_win else ""))
+              + sizing_note + (f"  exclude_earnings={excl_win}" if excl_win else ""))
         res = simulate_basket(symbols, rules=rules_list, combiner=args.combine,
                               period=args.period, hold_days=args.hold_days,
                               benchmark=args.benchmark,
                               max_concurrent=args.max_concurrent,
-                              exclude_earnings_window=excl_win)
+                              exclude_earnings_window=excl_win,
+                              sizing=args.sizing, target_vol=args.target_vol)
     else:
         print(f"\nSimulating '{args.rule_type}' on {len(symbols)} ticker(s)  "
               f"period={args.period}  hold={args.hold_days}d  params={params}  "
               f"max_concurrent={args.max_concurrent}"
-              + (f"  exclude_earnings={excl_win}" if excl_win else ""))
+              + sizing_note + (f"  exclude_earnings={excl_win}" if excl_win else ""))
         res = simulate_basket(symbols, args.rule_type, params,
                               period=args.period, hold_days=args.hold_days,
                               benchmark=args.benchmark,
                               max_concurrent=args.max_concurrent,
-                              exclude_earnings_window=excl_win)
+                              exclude_earnings_window=excl_win,
+                              sizing=args.sizing, target_vol=args.target_vol)
     s = res["summary"]
     if not s.get("n_trades"):
         print("No trades — rule never fired (or no future bars to close).")
@@ -743,6 +747,11 @@ def _build_parser():
                      metavar="N_BEFORE,N_AFTER",
                      help="Drop fires within this earnings window (e.g. 5,5).  "
                           "Skips entries near earnings to avoid gap risk.")
+    pst.add_argument("--sizing", choices=["equal", "inverse_vol"], default="equal",
+                     help="Position sizing: equal=1/max_concurrent (default); "
+                          "inverse_vol=scale by target_vol/realized_vol_60d (clamped 0.5-2x).")
+    pst.add_argument("--target-vol", type=float, default=0.20,
+                     help="Annualized vol target for inverse_vol sizing (default 0.20 = 20%%).")
     pst.add_argument("--show-trades", action="store_true", help="Print last 15 trades")
     pst.add_argument("--tearsheet", action="store_true",
                      help="Print calendar-year returns, drawdown stats, rolling Sharpe, beta")
